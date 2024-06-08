@@ -4,7 +4,7 @@ import sys
 import pygame
 
 # ROM path
-ROM = 'ROM/4-flags.ch8'
+ROM = 'Chip-8/ROM/morse_demo.ch8'
 
 # Initialize starting bytes
 PC = 0x200
@@ -132,7 +132,7 @@ def decode(inst):
     # Instruction Matching
     match nibble:
         case 0x0:
-            match int.from_bytes(inst):
+            match int.from_bytes(inst, 'big'):
                 case 0x00E0:
                     clear()
                 case 0x00EE:
@@ -164,28 +164,29 @@ def decode(inst):
                     V[X] = V[X] ^ V[Y]
                 case 0x4:
                     val = V[X] + V[Y]
-                    V[0xF] = 1 if val > 0xFF else 0
                     V[X] = val % 0x100
+                    V[0xF] = 1 if val > 0xFF else 0
                 case 0x5:
                     V[X] = (V[X] - V[Y]) % 0x100
-                    V[0xF] = V[X] > V[Y]
+                    V[0xF] = 1 if V[X] > V[Y] else 0
                 case 0x6:
                     # TODO quirk selection
-                    # TODO carry bits
                     V[X] = (V[X] >> 1) % 0x100
+                    V[0xF] = V[X] & 1
                 case 0x7:
                     V[X] = (V[Y] - V[X]) % 0x100
                     V[0xF] = V[Y] > V[X]
                 case 0xE:
                     # TODO quirk selection
-                    # TODO carry bits
                     V[X] = (V[X] << 1) % 0x100
+                    V[0xF] = V[X] >> 7
         case 0x9:
             incrementPC() if V[X] != V[Y] else None
         case 0xA:
             I = NNN
         case 0xB:
-            print("TODO Jump with offset")
+            # TODO quirk selection
+            PC = NNN + V[X]
         case 0xC:
             V[X] = random.randint(0, 255) & NN
         case 0xD:
@@ -209,20 +210,32 @@ def decode(inst):
         case 0xE:
             match NN:
                 case 0x9E:
-                    print("TODO skip if key")
+                    if KEYS[V[X]] == 1:
+                        PC += 2
                 case 0xA1:
-                    print('TODO skip if not key')
+                    if KEYS[V[X]] == 0:
+                        PC += 2
         case 0xF:
             match NN:
                 case 0x07:
                     V[X] = delay_timer
                 case 0x0A:
-                    PC -= 2
-                    for (i, c) in enumerate(KEYS):
-                        if c == 1:
-                            V[X] = i
-                            PC += 2
-                            break
+                    key_down = False
+                    key_up = False
+                    while not key_down or not key_up:
+                        for event in pygame.event.get(): 
+                            if event.type == pygame.QUIT:
+                                pygame.quit()
+                                sys.exit()     
+                            if event.type == pygame.KEYDOWN:
+                                if event.scancode in keycodes.keys():
+                                    key_down = keycodes[event.scancode]
+                            if event.type == pygame.KEYUP:
+                                if event.scancode in keycodes.keys():
+                                    if key_down == keycodes[event.scancode]:
+                                        key_up = True
+                                        break
+                    V[X] = key_down
 
                 case 0x15:
                     delay_timer = V[X]
@@ -251,31 +264,34 @@ def decode(inst):
 
 
 keycodes = {
-    pygame.KSCAN_1: 1,
-    pygame.KSCAN_2: 2,
-    pygame.KSCAN_3: 3,
-    pygame.KSCAN_Q: 4,
-    pygame.KSCAN_W: 5,
-    pygame.KSCAN_E: 6,
-    pygame.KSCAN_A: 7,
-    pygame.KSCAN_S: 8,
-    pygame.KSCAN_D: 9,
-    pygame.KSCAN_X: 0,
-    pygame.KSCAN_Z: 10,
-    pygame.KSCAN_C: 11,
-    pygame.KSCAN_4: 12,
-    pygame.KSCAN_R: 13,
-    pygame.KSCAN_F: 14,
-    pygame.KSCAN_V: 15,
+    pygame.KSCAN_1: 0x1,
+    pygame.KSCAN_2: 0x2,
+    pygame.KSCAN_3: 0x3,
+    pygame.KSCAN_Q: 0x4,
+    pygame.KSCAN_W: 0x5,
+    pygame.KSCAN_E: 0x6,
+    pygame.KSCAN_A: 0x7,
+    pygame.KSCAN_S: 0x8,
+    pygame.KSCAN_D: 0x9,
+    pygame.KSCAN_X: 0x0,
+    pygame.KSCAN_Z: 0xA,
+    pygame.KSCAN_C: 0xB,
+    pygame.KSCAN_4: 0xC,
+    pygame.KSCAN_R: 0xD,
+    pygame.KSCAN_F: 0xE,
+    pygame.KSCAN_V: 0xF,
 }
 
 clock = time.time()
+beep = pygame.mixer.Sound('Chip-8/beep.ogg')
 while True:
     curr = time.time()
     if (curr > clock + 1/60):
         clock = curr
         if delay_timer > 0:
             delay_timer -= 1
+        if sound_timer > 0:
+            sound_timer -= 1
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -287,6 +303,10 @@ while True:
         if event.type == pygame.KEYUP:
             if event.scancode in keycodes.keys():
                 KEYS[keycodes[event.scancode]] = 0
+
+    if (sound_timer > 0):
+        #TODO find a way to play a static long sound rather than a clip that can "end"
+        beep.play()
 
     # Operation
     data = fetch()

@@ -9,3 +9,8 @@ Test ROMs can be downloaded from
 
 *These have been really helpful, thanks to the authors for sharing!*
 
+
+## TODO
+* Menu to load ROM
+* Menu for quirk selection
+* Figure out continous beeping (cross-platform)
