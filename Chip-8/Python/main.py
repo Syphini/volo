@@ -312,4 +312,4 @@ while True:
     data = fetch()
     decode(data)
     update_display()
-    # time.sleep(1/700)
+    time.sleep(1/700)
