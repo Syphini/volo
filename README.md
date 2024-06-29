@@ -6,3 +6,5 @@ Currently available:
 
 * Chip-8
     * Python *(incomplete)*
+* GameBoy
+    * Python *(incomplete)*
