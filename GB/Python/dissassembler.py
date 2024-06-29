@@ -31,8 +31,9 @@ def disassemble(file_path):
         return f"{opcode['mnemonic']} {', '.join(ops)}"
 
     rows = []
+    print(len(CARTRIDGE))
     while PC < len(CARTRIDGE):
-        if PC >= 0x100 and PC < 0x150:
+        if PC >= 0x104 and PC < 0x150:
             # TODO CARTRIDGE HEADER
             PC = PC + 1
             continue
