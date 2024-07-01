@@ -7,13 +7,11 @@ with open('GB/opcodes.json') as f:
     opcodes = json.loads(f.read())
 
 ROM_FILE = 'GB/ROM/snake.gb'
-CARTRIDGE = bytearray()
-
-# RAM = bytearray(16)
+RAM = bytearray(65536)
 
 with open(ROM_FILE, 'rb') as f:
     for (cycle_count, b) in enumerate(f.read()):
-        CARTRIDGE.append(b)
+        RAM[cycle_count] = b
 
 
 def hexstring_to_bytearray(hex_data):
@@ -42,9 +40,6 @@ def get_tile(byte_data):
         TILE_DATA.append(colour_ids)
     return TILE_DATA
 
-
-# Debug RAM
-# print(bytearray.hex(RAM, ' ').upper())
 
 # region Graphics
 
@@ -117,7 +112,7 @@ class Registers:
         self.L = 0
 
         self.PC = 0
-        self.SP = 0
+        self.SP = 0xFFFE
 
         self.ZERO = 0
         self.SUBTRACTION = 0
@@ -130,8 +125,8 @@ class Registers:
 
     @BC.setter
     def BC(self, value: int):
-        self.B = value & 0b11111111
-        self.C = value >> 8
+        self.B = value >> 8
+        self.C = value & 0b11111111
 
     @property
     def DE(self):
@@ -139,8 +134,8 @@ class Registers:
 
     @DE.setter
     def DE(self, value: int):
-        self.D = value & 0b11111111
-        self.E = value >> 8
+        self.D = value >> 8
+        self.E = value & 0b11111111
 
     @property
     def HL(self):
@@ -148,12 +143,28 @@ class Registers:
 
     @HL.setter
     def HL(self, value: int):
-        self.H = value & 0b11111111
-        self.L = value >> 8
+        self.H = value >> 8
+        self.L = value & 0b11111111
+
+    def push(self, value: int):
+        self.SP -= 1
+        RAM[self.SP] = value >> 8
+
+        self.SP -= 1
+        RAM[self.SP] = value & 0b11111111
+
+    def POP(self):
+        lower = RAM[self.SP]
+        self.SP += 1
+
+        higher = RAM[self.SP]
+        self.SP += 1
+
+        return higher << 8 | lower
 
     def debug(self):
         data = {'A': self.A, 'B': self.B, 'C': self.C, 'D': self.D,
-                'E': self.E, 'F': 0, 'H': self.H, 'L': self.L}
+                'E': self.E, 'F': 0, 'H': self.H, 'L': self.L, 'PC': self.PC, 'SP': self.SP}
         print([{c: hex(data[c])} for c in data])
 
 
@@ -192,6 +203,16 @@ def NOP_00():
 def LD_01(value: int):
     """LD BC,n16"""
     R.BC = value
+
+
+def LD_02():
+    """LD [BC],A"""
+    RAM[R.BC] = R.A
+
+
+def INC_03():
+    """INC BC"""
+    R.BC += 1
 
 
 def INC_R8(register):
@@ -250,6 +271,16 @@ def ADD_09():
     R.CARRY = 1 if calc > 65535 else 0
 
 
+def LD_0A():
+    """LD A,[BC]"""
+    R.A = RAM[R.BC]
+
+
+def DEC_0B():
+    """DEC BC"""
+    R.BC -= 1
+
+
 def INC_0C():
     """INC C"""
     R.C = INC_R8(R.C)
@@ -279,6 +310,16 @@ def RRCA_0F():
 def LD_11(value: int):
     """LD DE,n16"""
     R.DE = value
+
+
+def LD_12():
+    """LD [DE],A"""
+    RAM[R.DE] = R.A
+
+
+def INC_13():
+    """INC DE"""
+    R.DE += 1
 
 
 def INC_14():
@@ -325,6 +366,16 @@ def ADD_19():
     R.CARRY = 1 if calc > 65535 else 0
 
 
+def LD_1A():
+    """LD A,[DE]"""
+    R.A = RAM[R.DE]
+
+
+def DEC_1B():
+    """DEC DE"""
+    R.DE -= 1
+
+
 def JR_20(value):
     """JR NZ,e8"""
     if R.ZERO == 0:
@@ -334,6 +385,11 @@ def JR_20(value):
 def LD_21(value: int):
     """LD HL,n16"""
     R.HL = value
+
+
+def INC_23():
+    """INC HL"""
+    R.HL += 1
 
 
 def INC_1C():
@@ -392,6 +448,17 @@ def ADD_29():
     R.CARRY = 1 if calc > 65535 else 0
 
 
+def LD_2A():
+    """LD A,[HLI]"""
+    R.A = RAM[R.HL]
+    R.HL += 1
+
+
+def DEC_2B():
+    """DEC HL"""
+    R.HL -= 1
+
+
 def INC_2C():
     """INC L"""
     R.L - INC_R8(R.L)
@@ -423,6 +490,11 @@ def JR_30(value):
 def LD_31(value: int):
     """LD SP,n16"""
     R.SP = value
+
+
+def INC_33():
+    """INC SP"""
+    R.SP += 1
 
 
 def INC_34():
@@ -460,6 +532,17 @@ def ADD_39():
     R.SUBTRACTION = 0
     R.HALFCARRY = 1 if calc > 2047 else 0
     R.CARRY = 1 if calc > 65535 else 0
+
+
+def LD_3A():
+    """LD A,[HLD]"""
+    R.A = RAM[R.HL]
+    R.HL -= 1
+
+
+def DEC_3B():
+    """DEC SP"""
+    R.SP -= 1
 
 
 def INC_3C():
@@ -1210,6 +1293,12 @@ def CP_BF():
     CP_A_N8(R.A)
 
 
+def RET_C0():
+    """RET NZ"""
+    if R.ZERO == 0:
+        JP_C3(R.POP())
+
+
 def JP_C2(value):
     """JP NZ,n16"""
     if R.ZERO == 0:
@@ -1224,6 +1313,17 @@ def JP_C3(value):
 def ADD_C6(value):
     """ADD A,n8"""
     ADD_A_N8(value)
+
+
+def RET_C8():
+    """RET Z"""
+    if R.ZERO == 1:
+        JP_C3(R.POP())
+
+
+def RET_C9():
+    """RET"""
+    JP_C3(R.POP())
 
 
 def JP_CA(value):
@@ -1294,42 +1394,42 @@ def RRC_R8(register):
     return calc
 
 
-def RRC_08():
+def RRC_CB08():
     """RRC B"""
     R.B = RRC_R8(R.B)
 
 
-def RRC_09():
+def RRC_CB09():
     """RRC C"""
     R.C = RRC_R8(R.C)
 
 
-def RRC_0A():
+def RRC_CB0A():
     """RRC D"""
     R.D = RRC_R8(R.D)
 
 
-def RRC_0B():
+def RRC_CB0B():
     """RRC E"""
     R.E = RRC_R8(R.E)
 
 
-def RRC_0C():
+def RRC_CB0C():
     """RRC H"""
     R.H = RRC_R8(R.H)
 
 
-def RRC_0D():
+def RRC_CB0D():
     """RRC L"""
     R.L = RRC_R8(R.L)
 
 
-def RRC_0E():
+def RRC_CB0E():
     """RRC [HL]"""
     pass
 
 
-def RRC_0F():
+def RRC_CB0F():
     """RRC A"""
     R.A = RRC_R8(R.A)
 
@@ -1971,7 +2071,7 @@ def BIT_CB7F():
 def RES_U3R8(register, value):
     initial = register
     higher = initial >> value + 1 << value + 1
-    lower = ((initial << 8 - value) & 0xFF) >> 8-value
+    lower = ((initial << 8 - value) & 0xFF) >> 8 - value
     calc = higher | lower
     return calc
 
@@ -2299,7 +2399,7 @@ def RES_CBBF():
 def SET_U3R8(register, value):
     initial = register
     higher = ((initial >> value) | 1) << value
-    lower = ((initial << 8 - value) & 0xFF) >> 8-value
+    lower = ((initial << 8 - value) & 0xFF) >> 8 - value
     calc = higher | lower
     return calc
 
@@ -2624,16 +2724,21 @@ def SET_CBFF():
     R.A = SET_U3R8(R.A, 7)
 
 
-def CALL_N16(value):
-    # SP = PC 
-    # relies on the PC already being on the next instruction
-    R.SP = R.PC
+def CALL_CD(value):
+    # NOTE: Must ensure PC is currently the address after CALL
+    R.push(R.PC)
     JP_C3(value)
 
 
 def ADC_CE(value):
     """ADC A,n8"""
     ADC_A_N8(value)
+
+
+def RET_D0():
+    """RET NC"""
+    if R.CARRY == 0:
+        JP_C3(R.POP())
 
 
 def JP_D2(value):
@@ -2647,6 +2752,12 @@ def SUB_D6(value):
     SUB_A_N8(value)
 
 
+def RET_D8():
+    """RET C"""
+    if R.CARRY == 1:
+        JP_C3(R.POP())
+
+
 def JP_DA(value):
     """JP C,n16"""
     if R.CARRY == 1:
@@ -2656,6 +2767,10 @@ def JP_DA(value):
 def SBC_DE(value):
     """SBC A,n8"""
     SBC_A_N8(value)
+
+def LDH_E0(value):
+    """LDH [n8],A"""
+    RAM[0xFF00 + value] = R.A
 
 
 def AND_E6(value):
@@ -2668,9 +2783,19 @@ def JP_E9():
     setPC(R.HL)
 
 
+def LD_EA(value):
+    """LD [n16],A"""
+    RAM[value] = R.A
+
+
 def XOR_EE(value):
     """XOR A,n8"""
     XOR_A_N8(value)
+
+
+def LDH_F0(value):
+    """LDH A,[n8]"""
+    R.A = RAM[0xFF00 + value]
 
 
 def OR_F6(value):
@@ -2687,13 +2812,12 @@ def CP_FE(value):
 
 # region CPU Logic
 
-
 def opcode_output(PC, opcode):
     ops = []
     for operand in opcode['operands']:
         if 'bytes' in operand:
             ops.append(int_to_hex(int.from_bytes(
-                bytes(CARTRIDGE[PC+1:PC+1+int(operand['bytes'])])[::-1])))
+                bytes(RAM[PC+1:PC+1+int(operand['bytes'])])[::-1])))
             continue
     return ops
 
@@ -2702,40 +2826,382 @@ def int_to_hex(value):
     return '0x' + hex(value)[2:].zfill(2).upper()
 
 
-while R.PC < len(CARTRIDGE):
+while R.PC < len(RAM):
     if R.PC >= 0x104 and R.PC < 0x150:
         # TODO CARTRIDGE HEADER
         incPC(1)
         continue
 
-    data = CARTRIDGE[R.PC]
+    data = RAM[R.PC]
     if (data == 0xCB):
-        data = CARTRIDGE[R.PC + 1]
+        data = RAM[R.PC + 1]
         opcode = opcodes['cbprefixed'][int_to_hex(data)]
         incPC(opcode['bytes'] + 1)
         continue
     opcode = opcodes['unprefixed'][int_to_hex(data)]
-    got_data = [int.from_bytes(bytes(CARTRIDGE[R.PC+1:R.PC+1+int(operand['bytes'])]), 'little')
+    got_data = [int.from_bytes(bytes(RAM[R.PC+1:R.PC+1+int(operand['bytes'])]), 'little')
                 for operand in opcode['operands'] if 'bytes' in operand]
+
+    # DEBUG
+    print(int_to_hex(R.PC), opcode['mnemonic'],
+          [int_to_hex(c) for c in got_data])
 
     incPC(opcode['bytes'])
     match data:
         case 0x00:
             NOP_00()
+        case 0x01:
+            LD_01(got_data[0])
+        case 0x03:
+            INC_03()
         case 0x04:
             INC_04()
         case 0x05:
             DEC_05()
+        case 0x06:
+            LD_06(got_data[0])
         case 0x07:
             RLCA_07()
+        case 0x0A:
+            LD_0A()
+        case 0x0B:
+            DEC_0B()
+        case 0x0C:
+            INC_0C()
+        case 0x0D:
+            DEC_0D()
+        case 0x0E:
+            LD_0E(got_data[0])
+        case 0x0F:
+            RRCA_0F()
+        case 0x11:
+            LD_11(got_data[0])
+        case 0x12:
+            LD_12()
+        case 0x13:
+            INC_13()
+        case 0x16:
+            LD_16(got_data[0])
+        case 0x18:
+            JR_18(got_data[0])
+        case 0x1A:
+            LD_1A()
+        case 0x1B:
+            DEC_1B()
+        case 0x1E:
+            LD_1E(got_data[0])
+        case 0x20:
+            JR_20(got_data[0])
+        case 0x21:
+            LD_21(got_data[0])
+        case 0x23:
+            INC_23()
+        case 0x26:
+            LD_26(got_data[0])
+        case 0x28:
+            JR_28(got_data[0])
+        case 0x29:
+            ADD_29()
+        case 0x2A:
+            LD_2A()
+        case 0x2B:
+            DEC_2B()
+        case 0x30:
+            JR_30(got_data[0])
         case 0x31:
-            LD_31()
+            LD_31(got_data[0])
+        case 0x33:
+            INC_33()
+        case 0x38:
+            JR_38(got_data[0])
+        case 0x3B:
+            DEC_3B()
+        case 0x3E:
+            LD_3E(got_data[0])
+        case 0x40:
+            LD_40()
+        case 0x41:
+            LD_41()
+        case 0x42:
+            LD_42()
+        case 0x43:
+            LD_43()
+        case 0x44:
+            LD_44()
+        case 0x45:
+            LD_45()
+        case 0x46:
+            LD_46()
+        case 0x47:
+            LD_47()
+        case 0x48:
+            LD_48()
+        case 0x49:
+            LD_49()
+        case 0x4A:
+            LD_4A()
+        case 0x4B:
+            LD_4B()
+        case 0x4C:
+            LD_4C()
+        case 0x4D:
+            LD_4D()
+        case 0x4E:
+            LD_4E()
+        case 0x4F:
+            LD_4F()
+        case 0x50:
+            LD_50()
+        case 0x51:
+            LD_51()
+        case 0x52:
+            LD_52()
+        case 0x53:
+            LD_53()
+        case 0x54:
+            LD_54()
+        case 0x55:
+            LD_55()
+        case 0x56:
+            LD_56()
+        case 0x57:
+            LD_57()
+        case 0x58:
+            LD_58()
+        case 0x59:
+            LD_59()
+        case 0x5A:
+            LD_5A()
+        case 0x5B:
+            LD_5B()
+        case 0x5C:
+            LD_5C()
+        case 0x5D:
+            LD_5D()
+        case 0x5E:
+            LD_5E()
+        case 0x5F:
+            LD_5F()
+        case 0x60:
+            LD_60()
+        case 0x61:
+            LD_61()
+        case 0x62:
+            LD_62()
+        case 0x63:
+            LD_63()
+        case 0x64:
+            LD_64()
+        case 0x65:
+            LD_65()
+        case 0x66:
+            LD_66()
+        case 0x67:
+            LD_67()
+        case 0x68:
+            LD_68()
+        case 0x69:
+            LD_69()
+        case 0x6A:
+            LD_6A()
+        case 0x6B:
+            LD_6B()
+        case 0x6C:
+            LD_6C()
+        case 0x6D:
+            LD_6D()
+        case 0x6E:
+            LD_6E()
+        case 0x6F:
+            LD_6F()
+        case 0x70:
+            LD_70()
+        case 0x71:
+            LD_71()
+        case 0x72:
+            LD_72()
+        case 0x73:
+            LD_73()
+        case 0x74:
+            LD_74()
+        case 0x75:
+            LD_75()
+        case 0x76:
+            HALT_76()
+        case 0x77:
+            LD_77()
+        case 0x78:
+            LD_78()
+        case 0x79:
+            LD_79()
+        case 0x7A:
+            LD_7A()
+        case 0x7B:
+            LD_7B()
+        case 0x7C:
+            LD_7C()
+        case 0x7D:
+            LD_7D()
+        case 0x7E:
+            LD_7E()
+        case 0x7F:
+            LD_7F()
+        case 0x80:
+            ADD_80()
+        case 0x81:
+            ADD_81()
+        case 0x82:
+            ADD_82()
+        case 0x83:
+            ADD_83()
+        case 0x84:
+            ADD_84()
+        case 0x85:
+            ADD_85()
+        case 0x86:
+            ADD_86()
+        case 0x87:
+            ADD_87()
+        case 0x88:
+            ADC_88()
+        case 0x89:
+            ADC_89()
+        case 0x8A:
+            ADC_8A()
+        case 0x8B:
+            ADC_8B()
+        case 0x8C:
+            ADC_8C()
+        case 0x8D:
+            ADC_8D()
+        case 0x8E:
+            ADC_8E()
+        case 0x8F:
+            ADC_8F()
+        case 0x90:
+            SUB_90()
+        case 0x91:
+            SUB_91()
+        case 0x92:
+            SUB_92()
+        case 0x93:
+            SUB_93()
+        case 0x94:
+            SUB_94()
+        case 0x95:
+            SUB_95()
+        case 0x96:
+            SUB_96()
+        case 0x97:
+            SUB_97()
+        case 0x98:
+            SBC_98()
+        case 0x99:
+            SBC_99()
+        case 0x9A:
+            SBC_9A()
+        case 0x9B:
+            SBC_9B()
+        case 0x9C:
+            SBC_9C()
+        case 0x9D:
+            SBC_9D()
+        case 0x9E:
+            SBC_9E()
+        case 0x9F:
+            SBC_9F()
+        case 0xA0:
+            AND_A0()
+        case 0xA1:
+            AND_A1()
+        case 0xA2:
+            AND_A2()
+        case 0xA3:
+            AND_A3()
+        case 0xA4:
+            AND_A4()
+        case 0xA5:
+            AND_A5()
+        case 0xA6:
+            AND_A6()
+        case 0xA7:
+            AND_A7()
+        case 0xA8:
+            XOR_A8()
+        case 0xA9:
+            XOR_A9()
+        case 0xAA:
+            XOR_AA()
+        case 0xAB:
+            XOR_AB()
+        case 0xAC:
+            XOR_AC()
+        case 0xAD:
+            XOR_AD()
+        case 0xAE:
+            XOR_AE()
+        case 0xAF:
+            XOR_AF()
+        case 0xB0:
+            OR_B0()
+        case 0xB1:
+            OR_B1()
+        case 0xB2:
+            OR_B2()
+        case 0xB3:
+            OR_B3()
+        case 0xB4:
+            OR_B4()
+        case 0xB5:
+            OR_B5()
+        case 0xB6:
+            OR_B6()
+        case 0xB7:
+            OR_B7()
+        case 0xB8:
+            CP_B8()
+        case 0xB9:
+            CP_B9()
+        case 0xBA:
+            CP_BA()
+        case 0xBB:
+            CP_BB()
+        case 0xBC:
+            CP_BC()
+        case 0xBD:
+            CP_BD()
+        case 0xBE:
+            CP_BE()
+        case 0xBF:
+            CP_BF()
+        case 0xC0:
+            RET_C0()
+        case 0xC2:
+            JP_C2(got_data[0])
         case 0xC3:
             JP_C3(got_data[0])
+        case 0xC8:
+            RET_C8()
+        case 0xC9:
+            RET_C9()
+        case 0xCA:
+            JP_CA(got_data[0])
         case 0xCD:
-            pass
+            CALL_CD(got_data[0])
+        case 0xE0:
+            LDH_E0(got_data[0])
+        case 0xEA:
+            LD_EA(got_data[0])
+        case 0xF0:
+            LDH_F0(got_data[0])
+        case 0xF6:
+            OR_F6(got_data[0])
+        case 0xFE:
+            CP_FE(got_data[0])
         case _:
             raise Exception(f"Unknown Instruction: {int_to_hex(data)}")
+
+    R.debug()
 
 
 # clear_display()
