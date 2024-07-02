@@ -6,8 +6,10 @@ print()
 with open('GB/opcodes.json') as f:
     opcodes = json.loads(f.read())
 
-ROM_FILE = 'GB/ROM/snake.gb'
+ROM_FILE = 'GB/ROM/firstwhite.gb'
 RAM = bytearray(65536)
+
+IME = 0
 
 with open(ROM_FILE, 'rb') as f:
     for (cycle_count, b) in enumerate(f.read()):
@@ -43,7 +45,7 @@ def get_tile(byte_data):
 
 # region Graphics
 
-pygame.init()
+# pygame.init()
 
 # Variables
 PIXEL_SIZE = 4
@@ -54,8 +56,8 @@ CANVAS_SIZE = (160 * PIXEL_SIZE, 144 * PIXEL_SIZE)
 PIXEL_STATE = [(255, 255, 255), (170, 170, 170), (85, 85, 85), (0, 0, 0)]
 
 # Canvas
-canvas = pygame.display.set_mode(CANVAS_SIZE)
-pygame.display.set_caption("GB Test")
+# canvas = pygame.display.set_mode(CANVAS_SIZE)
+# pygame.display.set_caption("GB Test")
 
 
 def update_display():
@@ -103,21 +105,21 @@ def clear_display():
 
 class Registers:
     def __init__(self):
-        self.A = 0
-        self.B = 0
-        self.C = 0
-        self.D = 0
-        self.E = 0
-        self.H = 0
-        self.L = 0
+        self.A = 0x01
+        self.B = 0x00
+        self.C = 0x13
+        self.D = 0x00
+        self.E = 0xD8
+        self.H = 0x01
+        self.L = 0x4D
 
-        self.PC = 0
+        self.PC = 0x100
         self.SP = 0xFFFE
 
-        self.ZERO = 0
+        self.ZERO = 1
         self.SUBTRACTION = 0
-        self.HALFCARRY = 0
-        self.CARRY = 0
+        self.HALFCARRY = 1  # temp
+        self.CARRY = 1  # temp
 
     @property
     def BC(self):
@@ -166,10 +168,65 @@ class Registers:
         data = {'A': self.A, 'B': self.B, 'C': self.C, 'D': self.D,
                 'E': self.E, 'F': 0, 'H': self.H, 'L': self.L, 'PC': self.PC, 'SP': self.SP}
         print([{c: hex(data[c])} for c in data])
+        print({'Z': R.ZERO, 'N': R.SUBTRACTION, 'H': R.HALFCARRY, 'C': R.CARRY})
+
+        # Hex Dump
+        with open('GB\ROM\dump.md', 'w') as f:
+            dump = bytearray.hex(RAM, ' ').upper()
+            n = 48
+            data = [f"{int_to_hex(i//3)} -- {dump[i:i+n]
+                                             }" for i in range(0, len(dump), n)]
+            f.write('\n'.join(data))
+
+
+class IORegisters:
+    def __init__(self):
+        self.P1 = 0xCF  # FF00
+        self.SB = 0x00  # FF01
+        self.SC = 0x73 # FF02
+        self.DIV = 0xAB # FF04
+        self.TIMA = 0x00 # FF05
+        self.TMA = 0x00 # FF06
+        self.TAC = 0xF8 # FF07
+        self.IF = 0xE1 # FF0F
+        self.NR10 = 0x80 # FF10
+        self.NR11 = 0xBF # FF11
+        self.NR12 = 0xF3 # FF12
+        self.NR13 = 0xFF # FF13
+        self.NR14 = 0xBF # FF14
+        self.NR21 = 0x3F # FF16
+        self.RN22 = 0x00 # FF17
+        self.NR23 = 0xFF # FF18
+        self.NR24 = 0xBF # FF19
+        self.NR30 = 0x7F # FF1A
+        self.NR31 = 0xFF # FF1B
+        self.NR32 = 0x9F # FF1C
+        self.NR33 = 0xFF # FF1D
+        self.NR34 = 0xBF # FF1E
+        self.NR41 = 0xFF # FF20
+        self.NR42 = 0x00 # FF21
+        self.NR43 = 0x00 # FF22
+        self.NR44 = 0xBF # FF23
+        self.NR50 = 0x77 # FF24
+        self.NR51 = 0xF3 # FF25
+        self.NR52 = 0xF1 # FF26
+        self.LCDC = 0x91 #FF40
+        self.STAT = 0x85 #FF41
+        self.SCY = 0x00 # FF42
+        self.SCX = 0x00 # FF43
+        self.LY = 0x00 # FF44
+        self.LYC = 0x00 # FF45
+        self.DMA = 0x00 # FF46
+        self.BGP = 0xFC # FF47
+        self.OBP0 = 0x00 # FF48
+        self.OBP1 = 0x00 # FF49
+        self.WY = 0x00 # FF4A
+        self.WX = 0x00 # FF4B
+        # ???
+        self.IE = 0x00 # FFFF
 
 
 # region Combined 8 bit (16 bit) registers
-
 R = Registers()
 
 
@@ -1308,6 +1365,13 @@ def JP_C2(value):
 def JP_C3(value):
     """JP n16"""
     setPC(value)
+
+
+def CALL_C4(value):
+    """CALL NZ,n16"""
+    if R.ZERO == 0:
+        R.push(R.PC)
+        JP_C3(value)
 
 
 def ADD_C6(value):
@@ -2724,7 +2788,15 @@ def SET_CBFF():
     R.A = SET_U3R8(R.A, 7)
 
 
+def CALL_CC(value):
+    """CALL Z,n16"""
+    if R.ZERO == 1:
+        R.push(R.PC)
+        JP_C3(value)
+
+
 def CALL_CD(value):
+    """CALL n16"""
     # NOTE: Must ensure PC is currently the address after CALL
     R.push(R.PC)
     JP_C3(value)
@@ -2747,6 +2819,13 @@ def JP_D2(value):
         setPC(value)
 
 
+def CALL_D4(value):
+    """CALL NC,n16"""
+    if R.CARRY == 0:
+        R.push(R.PC)
+        JP_C3(value)
+
+
 def SUB_D6(value):
     """SUB A,n8"""
     SUB_A_N8(value)
@@ -2764,9 +2843,17 @@ def JP_DA(value):
         setPC(value)
 
 
+def CALL_DC(value):
+    """CALL C,n16"""
+    if R.CARRY == 1:
+        R.push(R.PC)
+        JP_C3(value)
+
+
 def SBC_DE(value):
     """SBC A,n8"""
     SBC_A_N8(value)
+
 
 def LDH_E0(value):
     """LDH [n8],A"""
@@ -2798,9 +2885,21 @@ def LDH_F0(value):
     R.A = RAM[0xFF00 + value]
 
 
+def DI_F3():
+    """DI"""
+    global IME
+    IME = 0
+
+
 def OR_F6(value):
     """OR A,n8"""
     OR_A_N8(value)
+
+
+def EI_FB():
+    """EI"""
+    global IME
+    IME = 1
 
 
 def CP_FE(value):
@@ -2843,8 +2942,8 @@ while R.PC < len(RAM):
                 for operand in opcode['operands'] if 'bytes' in operand]
 
     # DEBUG
-    print(int_to_hex(R.PC), opcode['mnemonic'],
-          [int_to_hex(c) for c in got_data])
+    print(int_to_hex(R.PC), int_to_hex(data),
+          opcode['mnemonic'], [int_to_hex(c) for c in got_data])
 
     incPC(opcode['bytes'])
     match data:
@@ -3180,22 +3279,38 @@ while R.PC < len(RAM):
             JP_C2(got_data[0])
         case 0xC3:
             JP_C3(got_data[0])
+        case 0xC4:
+            CALL_C4(got_data[0])
         case 0xC8:
             RET_C8()
         case 0xC9:
             RET_C9()
         case 0xCA:
             JP_CA(got_data[0])
+        case 0xCC:
+            CALL_CC(got_data[0])
         case 0xCD:
             CALL_CD(got_data[0])
+        case 0xD0:
+            RET_D0()
+        case 0xD4:
+            CALL_D4(got_data[0])
+        case 0xD8:
+            RET_D8()
+        case 0xDC:
+            CALL_DC(got_data[0])
         case 0xE0:
             LDH_E0(got_data[0])
         case 0xEA:
             LD_EA(got_data[0])
         case 0xF0:
             LDH_F0(got_data[0])
+        case 0xF3:
+            DI_F3()
         case 0xF6:
             OR_F6(got_data[0])
+        case 0xFB:
+            EI_FB()
         case 0xFE:
             CP_FE(got_data[0])
         case _:
