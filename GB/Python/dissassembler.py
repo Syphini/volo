@@ -54,7 +54,7 @@ def disassemble(file_path):
 def open_file():
     """Open a file for editing."""
     filepath = askopenfilename(
-        filetypes=[("GB Files", "*.gb"), ("All Files", "*.*")]
+        filetypes=[("GB Files", "*.gb"), ('Binary Data', "*.bin"), ("All Files", "*.*")]
     )
     if not filepath:
         return

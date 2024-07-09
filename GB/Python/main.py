@@ -1,3 +1,4 @@
+import sys
 import json
 import pygame
 
@@ -6,14 +7,355 @@ print()
 with open('GB/opcodes.json') as f:
     opcodes = json.loads(f.read())
 
-ROM_FILE = 'GB/ROM/firstwhite.gb'
-RAM = bytearray(65536)
+ROM_FILE = 'GB/ROM/DMG_ROM.bin'
+# RAM = bytearray(0x8000)
 
-IME = 0
+# region Registers
+
+
+class Registers:
+    def __init__(self):
+        self.A = 0x01
+        self.B = 0x00
+        self.C = 0x13
+        self.D = 0x00
+        self.E = 0xD8
+        self.H = 0x01
+        self.L = 0x4D
+
+        self.PC = 0x0  # Boot ROM is 0x0; Cartridge is 0x100
+        self.SP = 0xFFFE
+
+        self.ZERO = 1
+        self.SUBTRACTION = 0
+        self.HALFCARRY = 1  # temp
+        self.CARRY = 1  # temp
+
+    @property
+    def AF(self):
+        return self.A << 8 | (self.ZERO << 7 | self.SUBTRACTION << 6 | self.HALFCARRY << 5 | self.CARRY << 4)
+
+    @property
+    def BC(self):
+        return self.B << 8 | self.C
+
+    @BC.setter
+    def BC(self, value: int):
+        self.B = value >> 8
+        self.C = value & 0b11111111
+
+    @property
+    def DE(self):
+        return self.D << 8 | self.E
+
+    @DE.setter
+    def DE(self, value: int):
+        self.D = value >> 8
+        self.E = value & 0b11111111
+
+    @property
+    def HL(self):
+        return self.H << 8 | self.L
+
+    @HL.setter
+    def HL(self, value: int):
+        self.H = value >> 8
+        self.L = value & 0b11111111
+
+    def PUSH(self, value: int):
+        self.SP -= 1
+        mmu.set_memory(self.SP, value >> 8)
+
+        self.SP -= 1
+        mmu.set_memory(self.SP, value & 0xFF)
+
+    def POP(self):
+        lower = mmu.get_memory(self.SP)
+        self.SP += 1
+
+        higher = mmu.get_memory(self.SP)
+        self.SP += 1
+
+        return higher << 8 | lower
+
+    def debug(self):
+        data = {'A': self.A, 'B': self.B, 'C': self.C, 'D': self.D,
+                'E': self.E, 'F': 0, 'H': self.H, 'L': self.L, 'PC': self.PC, 'SP': self.SP}
+        print([{c: hex(data[c])} for c in data])
+        print({'Z': R.ZERO, 'N': R.SUBTRACTION, 'H': R.HALFCARRY, 'C': R.CARRY})
+
+        mmu.dump()
+
+
+class PPU:
+    def __init__(self):
+        self.LCDC = 0x91  # FF40
+        self.STAT = 0x85  # FF41
+        self.SCY = 0x00  # FF42
+        self.SCX = 0x00  # FF43
+        self._LY = 0x00  # FF44 -- read-only
+        self.LYC = 0x00  # FF45
+        self.DMA = 0x00  # FF46
+        self.BGP = 0xFC  # FF47
+        self.OBP0 = 0x00  # FF48
+        self.OBP1 = 0x00  # FF49
+        self.WY = 0x00  # FF4A
+        self.WX = 0x00  # FF4B
+
+        self._MODE = 0
+        self._LX = 0x0
+        self._TILEMAP = 0x9800
+
+    def get(self, addr):
+        match addr:
+            case 0xFF40:
+                return self.LCDC
+            case 0xFF41:
+                return self.STAT
+            case 0xFF42:
+                return self.SCY
+            case 0xFF43:
+                return self.SCX
+            case 0xFF44:
+                return self._LY
+            case 0xFF45:
+                return self.LYC
+            case 0xFF46:
+                return self.DMA
+            case 0xFF47:
+                return self.BGP
+            case 0xFF48:
+                return self.OBP0
+            case 0xFF49:
+                return self.OBP1
+            case 0xFF4A:
+                return self.WY
+            case 0xFF4B:
+                return self.WX
+            case _:
+                raise Exception("Unknown IO Register:", addr)
+
+    def set(self, addr, value):
+        match addr:
+            case 0xFF40:
+                self.LCDC = value
+            case 0xFF41:
+                self.STAT = value
+            case 0xFF42:
+                self.SCY = value
+            case 0xFF43:
+                self.SCX = value
+            case 0xFF45:
+                self.LYC = value
+            case 0xFF46:
+                self.DMA = value
+            case 0xFF47:
+                self.BGP = value
+            case 0xFF48:
+                self.OBP0 = value
+            case 0xFF49:
+                self.OBP1 = value
+            case 0xFF4A:
+                self.WY = value
+            case 0xFF4B:
+                self.WX = value
+            case _:
+                raise Exception("Unknown IO Register:", addr)
+
+    # Tilemap 1 9800 -> 9BFF
+    # Tilemap 2 9C00 -> 9FFF
+
+    def tick(self):
+        match self._MODE:
+            case 2:  # OAM
+                # if currentTick == 40:
+                #   self._MODE = 3
+                pass
+            case 3:  # Pixel
+                self._LX += 1
+                if self._LX == 160:
+                    self._MODE = 0
+            case 0:  # H-Blank
+                if self._LY == 144:
+                    self._MODE = 1
+                else:
+                    self._MODE = 2
+            case 1:  # V-Blank
+                # if currentTick == 456:
+                self._LY += 1
+                if self._LY == 153:
+                    self._LY = 0
+                    self._MODE = 2
+
+        update_display()
+
+    def get_tile(self, byte_data: bytearray):
+        TILE_DATA = []
+        for c in range(len(byte_data) - 1):
+            if c % 2 == 1:
+                continue
+
+            BYTE_1 = byte_data[c]
+            BYTE_2 = byte_data[c+1]
+
+            colour_ids = []
+            for i in range(8):
+                b1 = bin(BYTE_1)[2:].zfill(8)
+                b2 = bin(BYTE_2)[2:].zfill(8)
+                calc = (b2[i] + b1[i])
+                colour_ids.append(int(calc, 2))
+
+            TILE_DATA.append(colour_ids)
+        return TILE_DATA
+
+
+class IORegisters:
+    def __init__(self):
+        lcd = PPU()
+
+        self.P1 = 0xCF  # FF00
+        self.SB = 0x00  # FF01
+        self.SC = 0x73  # FF02
+        self.DIV = 0xAB  # FF04
+        self.TIMA = 0x00  # FF05
+        self.TMA = 0x00  # FF06
+        self.TAC = 0xF8  # FF07
+        self.IF = 0xE1  # FF0F
+        self.NR10 = 0x80  # FF10
+        self.NR11 = 0xBF  # FF11
+        self.NR12 = 0xF3  # FF12
+        self.NR13 = 0xFF  # FF13
+        self.NR14 = 0xBF  # FF14
+        self.NR21 = 0x3F  # FF16
+        self.RN22 = 0x00  # FF17
+        self.NR23 = 0xFF  # FF18
+        self.NR24 = 0xBF  # FF19
+        self.NR30 = 0x7F  # FF1A
+        self.NR31 = 0xFF  # FF1B
+        self.NR32 = 0x9F  # FF1C
+        self.NR33 = 0xFF  # FF1D
+        self.NR34 = 0xBF  # FF1E
+        self.NR41 = 0xFF  # FF20
+        self.NR42 = 0x00  # FF21
+        self.NR43 = 0x00  # FF22
+        self.NR44 = 0xBF  # FF23
+        self.NR50 = 0x77  # FF24
+        self.NR51 = 0xF3  # FF25
+        self.NR52 = 0xF1  # FF26
+        self.LCD = lcd  # FF40 -> FF4B
+        # ???
+        self.IE = 0x00  # FFFF
+
+
+R = Registers()
+
+
+def setPC(value: int):
+    R.PC = value
+
+
+def incPC(value: int):
+    setPC(R.PC + value)
+
+
+def getLowerNibble(value: int):
+    return value & 0b1111
+
+
+def debugRegAsHex():
+    R.debug()
+
+
+# endregion
+
+class MMU:
+    def __init__(self):
+
+        io = IORegisters()
+
+        self.RAM = bytearray(0x8000)  # 0000 -> 7FFF
+        self.VRAM = bytearray(0x2000)  # 8000 -> 9FFF
+        self.ERAM = bytearray(0x2000)  # A000 -> BFFF
+        self.WRAM = bytearray(0x2000)  # C000 -> DFFF
+        self.ECHO = bytearray(0x1E00)  # E000 -> FDFF
+        self.OAM = bytearray(0xA0)  # FE00 -> FE9F
+        self.EMPTY = bytearray(0x60)  # FEA0 -> FEFF
+        self.IO = io  # FF00 -> FF7F
+        self.HRAM = bytearray(0x7F)  # FF80 -> FFFE
+        self.IE = False  # FFFF
+
+    def get_memory(self, address):
+        match address:
+            case addr if 0x0000 <= addr <= 0x7FFF:
+                return self.RAM[address]
+            case addr if 0x8000 <= addr <= 0x9FFF:
+                return self.VRAM[address - 0x8000]
+            case addr if 0xA000 <= addr <= 0xBFFF:
+                return self.ERAM[address - 0xA000]
+            case addr if 0xC000 <= addr <= 0xDFFF:
+                return self.WRAM[address - 0xC000]
+            case addr if 0xE000 <= addr <= 0xFDFF:
+                return self.OAM[address - 0xE000]
+            case addr if 0xFE00 <= addr <= 0xFE9F:
+                return self.ECHO[address - 0xFE00]
+            case 0xFF00:
+                return self.IO.P1
+            case addr if 0xFF10 <= addr <= 0xFF26:
+                print("TODO handle audio registers")
+            case addr if 0xFF40 <= addr <= 0xFF4B:
+                return self.IO.LCD.get(addr)
+            case addr if 0xFF80 <= addr <= 0xFFFE:
+                return self.HRAM[address - 0xFF80]
+            case 0xFFFF:
+                return self.IE
+            case _:
+                raise Exception("Inaccessible Memory:", address)
+
+    def set_memory(self, address, value):
+        match address:
+            case addr if 0x0000 <= addr <= 0x7FFF:
+                self.RAM[address] = value
+            case addr if 0x8000 <= addr <= 0x9FFF:
+                self.VRAM[address - 0x8000] = value
+            case addr if 0xA000 <= addr <= 0xBFFF:
+                self.ERAM[address - 0xA000] = value
+            case addr if 0xC000 <= addr <= 0xDFFF:
+                self.WRAM[address - 0xC000] = value
+            case addr if 0xE000 <= addr <= 0xFDFF:
+                self.OAM[address - 0xE000] = value
+            case addr if 0xFE00 <= addr <= 0xFE9F:
+                self.ECHO[address - 0xFE00] = value
+            case 0xFF00:
+                self.IO.P1 = value
+            case addr if 0xFF10 <= addr <= 0xFF26:
+                print("TODO handle audio registers")
+            case addr if 0xFF40 <= addr <= 0xFF4B:
+                self.IO.LCD.set(addr, value)
+            case addr if 0xFF80 <= addr <= 0xFFFE:
+                self.HRAM[address - 0xFF80] = value
+            case 0xFFFF:
+                self.IE = value
+            case _:
+                raise Exception("Inaccessible Memory:", address)
+
+    def dump(self):
+        # Hex Dump
+        with open('GB\ROM\dump.md', 'w') as f:
+            dump = bytearray.hex(self.RAM + self.VRAM + self.ERAM +
+                                 self.WRAM + self.OAM + self.ECHO + self.EMPTY + bytearray(0x80) + self.HRAM, ' ').upper()
+            n = 48
+            data = [f"{int_to_hex(i//3)} -- {dump[i:i+n]
+                                             }" for i in range(0, len(dump), n)]
+            f.write('\n'.join(data))
+
+
+mmu = MMU()
+
+IME = False
 
 with open(ROM_FILE, 'rb') as f:
     for (cycle_count, b) in enumerate(f.read()):
-        RAM[cycle_count] = b
+        mmu.set_memory(cycle_count, b)
 
 
 def hexstring_to_bytearray(hex_data):
@@ -22,30 +364,10 @@ def hexstring_to_bytearray(hex_data):
         data.append(c)
     return data
 
-
-def get_tile(byte_data):
-    TILE_DATA = []
-    for c in range(len(byte_data) - 1):
-        if c % 2 == 1:
-            continue
-
-        BYTE_1 = byte_data[c]
-        BYTE_2 = byte_data[c+1]
-
-        colour_ids = []
-        for i in range(8):
-            b1 = bin(BYTE_1)[2:].zfill(8)
-            b2 = bin(BYTE_2)[2:].zfill(8)
-            calc = (b2[i] + b1[i])
-            colour_ids.append(int(calc, 2))
-
-        TILE_DATA.append(colour_ids)
-    return TILE_DATA
-
-
 # region Graphics
 
-# pygame.init()
+
+pygame.init()
 
 # Variables
 PIXEL_SIZE = 4
@@ -56,8 +378,8 @@ CANVAS_SIZE = (160 * PIXEL_SIZE, 144 * PIXEL_SIZE)
 PIXEL_STATE = [(255, 255, 255), (170, 170, 170), (85, 85, 85), (0, 0, 0)]
 
 # Canvas
-# canvas = pygame.display.set_mode(CANVAS_SIZE)
-# pygame.display.set_caption("GB Test")
+canvas = pygame.display.set_mode(CANVAS_SIZE)
+pygame.display.set_caption("GB Test")
 
 
 def update_display():
@@ -99,161 +421,11 @@ def clear_display():
 
 # endregion
 
-# region Registers
-
-# 8 bit Registers
-
-class Registers:
-    def __init__(self):
-        self.A = 0x01
-        self.B = 0x00
-        self.C = 0x13
-        self.D = 0x00
-        self.E = 0xD8
-        self.H = 0x01
-        self.L = 0x4D
-
-        self.PC = 0x100
-        self.SP = 0xFFFE
-
-        self.ZERO = 1
-        self.SUBTRACTION = 0
-        self.HALFCARRY = 1  # temp
-        self.CARRY = 1  # temp
-
-    @property
-    def BC(self):
-        return self.B << 8 | self.C
-
-    @BC.setter
-    def BC(self, value: int):
-        self.B = value >> 8
-        self.C = value & 0b11111111
-
-    @property
-    def DE(self):
-        return self.D << 8 | self.E
-
-    @DE.setter
-    def DE(self, value: int):
-        self.D = value >> 8
-        self.E = value & 0b11111111
-
-    @property
-    def HL(self):
-        return self.H << 8 | self.L
-
-    @HL.setter
-    def HL(self, value: int):
-        self.H = value >> 8
-        self.L = value & 0b11111111
-
-    def push(self, value: int):
-        self.SP -= 1
-        RAM[self.SP] = value >> 8
-
-        self.SP -= 1
-        RAM[self.SP] = value & 0b11111111
-
-    def POP(self):
-        lower = RAM[self.SP]
-        self.SP += 1
-
-        higher = RAM[self.SP]
-        self.SP += 1
-
-        return higher << 8 | lower
-
-    def debug(self):
-        data = {'A': self.A, 'B': self.B, 'C': self.C, 'D': self.D,
-                'E': self.E, 'F': 0, 'H': self.H, 'L': self.L, 'PC': self.PC, 'SP': self.SP}
-        print([{c: hex(data[c])} for c in data])
-        print({'Z': R.ZERO, 'N': R.SUBTRACTION, 'H': R.HALFCARRY, 'C': R.CARRY})
-
-        # Hex Dump
-        with open('GB\ROM\dump.md', 'w') as f:
-            dump = bytearray.hex(RAM, ' ').upper()
-            n = 48
-            data = [f"{int_to_hex(i//3)} -- {dump[i:i+n]
-                                             }" for i in range(0, len(dump), n)]
-            f.write('\n'.join(data))
-
-
-class IORegisters:
-    def __init__(self):
-        self.P1 = 0xCF  # FF00
-        self.SB = 0x00  # FF01
-        self.SC = 0x73 # FF02
-        self.DIV = 0xAB # FF04
-        self.TIMA = 0x00 # FF05
-        self.TMA = 0x00 # FF06
-        self.TAC = 0xF8 # FF07
-        self.IF = 0xE1 # FF0F
-        self.NR10 = 0x80 # FF10
-        self.NR11 = 0xBF # FF11
-        self.NR12 = 0xF3 # FF12
-        self.NR13 = 0xFF # FF13
-        self.NR14 = 0xBF # FF14
-        self.NR21 = 0x3F # FF16
-        self.RN22 = 0x00 # FF17
-        self.NR23 = 0xFF # FF18
-        self.NR24 = 0xBF # FF19
-        self.NR30 = 0x7F # FF1A
-        self.NR31 = 0xFF # FF1B
-        self.NR32 = 0x9F # FF1C
-        self.NR33 = 0xFF # FF1D
-        self.NR34 = 0xBF # FF1E
-        self.NR41 = 0xFF # FF20
-        self.NR42 = 0x00 # FF21
-        self.NR43 = 0x00 # FF22
-        self.NR44 = 0xBF # FF23
-        self.NR50 = 0x77 # FF24
-        self.NR51 = 0xF3 # FF25
-        self.NR52 = 0xF1 # FF26
-        self.LCDC = 0x91 #FF40
-        self.STAT = 0x85 #FF41
-        self.SCY = 0x00 # FF42
-        self.SCX = 0x00 # FF43
-        self.LY = 0x00 # FF44
-        self.LYC = 0x00 # FF45
-        self.DMA = 0x00 # FF46
-        self.BGP = 0xFC # FF47
-        self.OBP0 = 0x00 # FF48
-        self.OBP1 = 0x00 # FF49
-        self.WY = 0x00 # FF4A
-        self.WX = 0x00 # FF4B
-        # ???
-        self.IE = 0x00 # FFFF
-
-
-# region Combined 8 bit (16 bit) registers
-R = Registers()
-
-
-def setPC(value: int):
-    R.PC = value
-
-
-def incPC(value: int):
-    setPC(R.PC + value)
-
-
-def getLowerNibble(value: int):
-    return value & 0b1111
-
-
-def debugRegAsHex():
-    R.debug()
-
-
-# endregion
-
-# endregion
-
 # region Opcodes
 
 
 def NOP_00():
+    """NOP"""
     pass
 
 
@@ -264,7 +436,7 @@ def LD_01(value: int):
 
 def LD_02():
     """LD [BC],A"""
-    RAM[R.BC] = R.A
+    mmu.set_memory(R.BC, R.A)
 
 
 def INC_03():
@@ -330,7 +502,7 @@ def ADD_09():
 
 def LD_0A():
     """LD A,[BC]"""
-    R.A = RAM[R.BC]
+    R.A = mmu.get_memory(R.BC)
 
 
 def DEC_0B():
@@ -371,7 +543,7 @@ def LD_11(value: int):
 
 def LD_12():
     """LD [DE],A"""
-    RAM[R.DE] = R.A
+    mmu.set_memory(R.DE, R.A)
 
 
 def INC_13():
@@ -425,28 +597,12 @@ def ADD_19():
 
 def LD_1A():
     """LD A,[DE]"""
-    R.A = RAM[R.DE]
+    R.A = mmu.get_memory(R.DE)
 
 
 def DEC_1B():
     """DEC DE"""
     R.DE -= 1
-
-
-def JR_20(value):
-    """JR NZ,e8"""
-    if R.ZERO == 0:
-        JR_18(value)
-
-
-def LD_21(value: int):
-    """LD HL,n16"""
-    R.HL = value
-
-
-def INC_23():
-    """INC HL"""
-    R.HL += 1
 
 
 def INC_1C():
@@ -473,6 +629,28 @@ def RRA_1F(register):
     R.HALFCARRY = 0
     R.CARRY = carryBit
     return calc
+
+
+def JR_20(value):
+    """JR NZ,e8"""
+    if R.ZERO == 0:
+        JR_18(value)
+
+
+def LD_21(value: int):
+    """LD HL,n16"""
+    R.HL = value
+
+
+def LD_22():
+    """LD [HLI],A"""
+    mmu.set_memory(R.HL, R.A)
+    R.HL += 1
+
+
+def INC_23():
+    """INC HL"""
+    R.HL += 1
 
 
 def INC_24():
@@ -507,7 +685,7 @@ def ADD_29():
 
 def LD_2A():
     """LD A,[HLI]"""
-    R.A = RAM[R.HL]
+    R.A = mmu.get_memory(R.HL)
     R.HL += 1
 
 
@@ -549,6 +727,12 @@ def LD_31(value: int):
     R.SP = value
 
 
+def LD_32():
+    """LD [HLD],A"""
+    mmu.set_memory(R.HL, R.A)
+    R.HL -= 1
+
+
 def INC_33():
     """INC SP"""
     R.SP += 1
@@ -556,17 +740,17 @@ def INC_33():
 
 def INC_34():
     """INC [HL]"""
-    pass
+    mmu.set_memory(R.HL, mmu.get_memory(R.HL) + 1)
 
 
 def DEC_35():
     """DEC [HL]"""
-    pass
+    mmu.set_memory(R.HL, mmu.get_memory(R.HL) - 1)
 
 
 def LD_36(value):
     """LD [HL],n8"""
-    R.HL = value
+    mmu.set_memory(R.HL, value)
 
 
 def SCF_37():
@@ -593,7 +777,7 @@ def ADD_39():
 
 def LD_3A():
     """LD A,[HLD]"""
-    R.A = RAM[R.HL]
+    R.A = mmu.get_memory(R.HL)
     R.HL -= 1
 
 
@@ -656,7 +840,7 @@ def LD_45():
 
 def LD_46():
     """LD B,[HL]"""
-    pass
+    R.B = mmu.get_memory(R.HL)
 
 
 def LD_47():
@@ -696,7 +880,7 @@ def LD_4D():
 
 def LD_4E():
     """LD C,[HL]"""
-    pass
+    R.C = mmu.get_memory(R.HL)
 
 
 def LD_4F():
@@ -736,7 +920,7 @@ def LD_55():
 
 def LD_56():
     """LD D,[HL]"""
-    pass
+    R.D = mmu.get_memory(R.HL)
 
 
 def LD_57():
@@ -776,7 +960,7 @@ def LD_5D():
 
 def LD_5E():
     """LD E,[HL]"""
-    pass
+    R.E = mmu.get_memory(R.HL)
 
 
 def LD_5F():
@@ -816,7 +1000,7 @@ def LD_65():
 
 def LD_66():
     """LD H,[HL]"""
-    pass
+    R.H = mmu.get_memory(R.HL)
 
 
 def LD_67():
@@ -856,7 +1040,7 @@ def LD_6D():
 
 def LD_6E():
     """LD L,[HL]"""
-    pass
+    R.L = mmu.get_memory(R.HL)
 
 
 def LD_6F():
@@ -866,32 +1050,32 @@ def LD_6F():
 
 def LD_70():
     """LD [HL],B"""
-    pass
+    mmu.set_memory(R.HL, R.B)
 
 
 def LD_71():
     """LD [HL],C"""
-    pass
+    mmu.set_memory(R.HL, R.C)
 
 
 def LD_72():
     """LD [HL],D"""
-    pass
+    mmu.set_memory(R.HL, R.D)
 
 
 def LD_73():
     """LD [HL],E"""
-    pass
+    mmu.set_memory(R.HL, R.E)
 
 
 def LD_74():
     """LD [HL],H"""
-    pass
+    mmu.set_memory(R.HL, R.H)
 
 
 def LD_75():
     """LD [HL],L"""
-    pass
+    mmu.set_memory(R.HL, R.L)
 
 
 def HALT_76():
@@ -901,7 +1085,7 @@ def HALT_76():
 
 def LD_77():
     """LD [HL],A"""
-    pass
+    mmu.set_memory(R.HL, R.A)
 
 
 def LD_78():
@@ -936,7 +1120,7 @@ def LD_7D():
 
 def LD_7E():
     """LD A,[HL]"""
-    pass
+    R.A = mmu.get_memory(R.HL)
 
 
 def LD_7F():
@@ -987,7 +1171,7 @@ def ADD_85():
 
 def ADD_86():
     """ADD A,[HL]"""
-    pass
+    ADD_A_N8(mmu.get_memory(R.HL))
 
 
 def ADD_87():
@@ -1039,7 +1223,7 @@ def ADC_8D():
 
 def ADC_8E():
     """ADC A,[HL]"""
-    pass
+    ADC_A_N8(mmu.get_memory(R.HL))
 
 
 def ADC_8F():
@@ -1090,7 +1274,7 @@ def SUB_95():
 
 def SUB_96():
     """SUB A,[HL]"""
-    pass
+    SUB_A_N8(mmu.get_memory(R.HL))
 
 
 def SUB_97():
@@ -1142,7 +1326,7 @@ def SBC_9D():
 
 def SBC_9E():
     """SBC A,[HL]"""
-    pass
+    SBC_A_N8(mmu.get_memory(R.HL))
 
 
 def SBC_9F():
@@ -1192,7 +1376,7 @@ def AND_A5():
 
 def AND_A6():
     """AND A,[HL]"""
-    pass
+    AND_A_N8(mmu.get_memory(R.HL))
 
 
 def AND_A7():
@@ -1242,7 +1426,7 @@ def XOR_AD():
 
 def XOR_AE():
     """XOR A,[HL]"""
-    pass
+    XOR_A_N8(mmu.get_memory(R.HL))
 
 
 def XOR_AF():
@@ -1292,7 +1476,7 @@ def OR_B5():
 
 def OR_B6():
     """OR A,[HL]"""
-    pass
+    OR_A_N8(mmu.get_memory(R.HL))
 
 
 def OR_B7():
@@ -1342,7 +1526,7 @@ def CP_BD():
 
 def CP_BE():
     """CP A,[HL]"""
-    pass
+    CP_A_N8(mmu.get_memory(R.HL))
 
 
 def CP_BF():
@@ -1354,6 +1538,11 @@ def RET_C0():
     """RET NZ"""
     if R.ZERO == 0:
         JP_C3(R.POP())
+
+
+def POP_C1():
+    """POP BC"""
+    R.BC = R.POP()
 
 
 def JP_C2(value):
@@ -1370,8 +1559,13 @@ def JP_C3(value):
 def CALL_C4(value):
     """CALL NZ,n16"""
     if R.ZERO == 0:
-        R.push(R.PC)
+        R.PUSH(R.PC)
         JP_C3(value)
+
+
+def PUSH_C5():
+    """PUSH BC"""
+    R.PUSH(R.BC)
 
 
 def ADD_C6(value):
@@ -1396,8 +1590,8 @@ def JP_CA(value):
         setPC(value)
 
 
-def RLC_R8(register):
-    initial = register
+def RLC_R8(value):
+    initial = value
     carryBit = (initial >> 7)
     calc = (initial << 1) & 0b11111110 | carryBit
     R.ZERO = 1 if calc == 0 else 0
@@ -1439,7 +1633,7 @@ def RLC_CB05():
 
 def RLC_CB06():
     """RLC [HL]"""
-    pass
+    mmu.set_memory(R.HL, RLC_R8(mmu.get_memory(R.HL)))
 
 
 def RLC_CB07():
@@ -1490,7 +1684,7 @@ def RRC_CB0D():
 
 def RRC_CB0E():
     """RRC [HL]"""
-    pass
+    mmu.set_memory(R.HL, RRC_R8(mmu.get_memory(R.HL)))
 
 
 def RRC_CB0F():
@@ -1499,15 +1693,14 @@ def RRC_CB0F():
 
 
 def RL_R8(register):
-    initial = R[register]
+    initial = register
     carryBit = (initial >> 7)
     calc = (initial << 1) & 0b11111110 | R.CARRY
-    R[register] = calc
-
     R.ZERO = 1 if calc == 0 else 0
     R.SUBTRACTION = 0
     R.HALFCARRY = 0
     R.CARRY = carryBit
+    return calc
 
 
 def RL_CB10():
@@ -1542,7 +1735,7 @@ def RL_CB15():
 
 def RL_CB16():
     """RL [HL]"""
-    pass
+    mmu.set_memory(R.HL, RL_R8(mmu.get_memory(R.HL)))
 
 
 def RL_CB17():
@@ -1593,7 +1786,7 @@ def RR_CB1D():
 
 def RR_CB1E():
     """RR [HL]"""
-    pass
+    mmu.set_memory(R.HL, RR_R8(mmu.get_memory(R.HL)))
 
 
 def RR_CB1F():
@@ -1644,7 +1837,7 @@ def SLA_CB25():
 
 def SLA_CB26():
     """SLA [HL]"""
-    pass
+    mmu.set_memory(R.HL, SLA_R8(mmu.get_memory(R.HL)))
 
 
 def SLA_CB27():
@@ -1695,7 +1888,7 @@ def SRA_CB2D():
 
 def SRA_CB2E():
     """SRA [HL]"""
-    pass
+    mmu.set_memory(R.HL, SRA_R8(mmu.get_memory(R.HL)))
 
 
 def SRA_CB2F():
@@ -1745,7 +1938,7 @@ def SWAP_CB35():
 
 def SWAP_CB36():
     """SWAP [HL]"""
-    pass
+    mmu.set_memory(R.HL, SWAP_R8(mmu.get_memory(R.HL)))
 
 
 def SWAP_CB37():
@@ -1796,7 +1989,7 @@ def SRL_CB3D():
 
 def SRL_CB3E():
     """SRL [HL]"""
-    pass
+    mmu.set_memory(R.HL, SRL_R8(mmu.get_memory(R.HL)))
 
 
 def SRL_CB3F():
@@ -1844,7 +2037,7 @@ def BIT_CB45():
 
 def BIT_CB46():
     """BIT 0,[HL]"""
-    pass
+    BIT_U3R8(mmu.get_memory(R.HL), 0)
 
 
 def BIT_CB47():
@@ -1884,7 +2077,7 @@ def BIT_CB4D():
 
 def BIT_CB4E():
     """BIT 1,[HL]"""
-    pass
+    BIT_U3R8(mmu.get_memory(R.HL), 1)
 
 
 def BIT_CB4F():
@@ -1924,7 +2117,7 @@ def BIT_CB55():
 
 def BIT_CB56():
     """BIT 2,[HL]"""
-    pass
+    BIT_U3R8(mmu.get_memory(R.HL), 2)
 
 
 def BIT_CB57():
@@ -1964,7 +2157,7 @@ def BIT_CB5D():
 
 def BIT_CB5E():
     """BIT 3,[HL]"""
-    pass
+    BIT_U3R8(mmu.get_memory(R.HL), 3)
 
 
 def BIT_CB5F():
@@ -2004,7 +2197,7 @@ def BIT_CB65():
 
 def BIT_CB66():
     """BIT 4,[HL]"""
-    pass
+    BIT_U3R8(mmu.get_memory(R.HL), 4)
 
 
 def BIT_CB67():
@@ -2044,7 +2237,7 @@ def BIT_CB6D():
 
 def BIT_CB6E():
     """BIT 5,[HL]"""
-    pass
+    BIT_U3R8(mmu.get_memory(R.HL), 5)
 
 
 def BIT_CB6F():
@@ -2084,7 +2277,7 @@ def BIT_CB75():
 
 def BIT_CB76():
     """BIT 6,[HL]"""
-    pass
+    BIT_U3R8(mmu.get_memory(R.HL), 6)
 
 
 def BIT_CB77():
@@ -2124,7 +2317,7 @@ def BIT_CB7D():
 
 def BIT_CB7E():
     """BIT 7,[HL]"""
-    pass
+    BIT_U3R8(mmu.get_memory(R.HL), 7)
 
 
 def BIT_CB7F():
@@ -2172,7 +2365,7 @@ def RES_CB85():
 
 def RES_CB86():
     """RES 0,[HL]"""
-    pass
+    mmu.set_memory(R.HL, RES_U3R8(mmu.get_memory(R.HL), 0))
 
 
 def RES_CB87():
@@ -2212,7 +2405,7 @@ def RES_CB8D():
 
 def RES_CB8E():
     """RES 1,[HL]"""
-    pass
+    mmu.set_memory(R.HL, RES_U3R8(mmu.get_memory(R.HL), 1))
 
 
 def RES_CB8F():
@@ -2252,7 +2445,7 @@ def RES_CB95():
 
 def RES_CB96():
     """RES 2,[HL]"""
-    pass
+    mmu.set_memory(R.HL, RES_U3R8(mmu.get_memory(R.HL), 2))
 
 
 def RES_CB97():
@@ -2292,7 +2485,7 @@ def RES_CB9D():
 
 def RES_CB9E():
     """RES 3,[HL]"""
-    pass
+    mmu.set_memory(R.HL, RES_U3R8(mmu.get_memory(R.HL), 3))
 
 
 def RES_CB9F():
@@ -2332,7 +2525,7 @@ def RES_CBA5():
 
 def RES_CBA6():
     """RES 4,[HL]"""
-    pass
+    mmu.set_memory(R.HL, RES_U3R8(mmu.get_memory(R.HL), 4))
 
 
 def RES_CBA7():
@@ -2372,7 +2565,7 @@ def RES_CBAD():
 
 def RES_CBAE():
     """RES 5,[HL]"""
-    pass
+    mmu.set_memory(R.HL, RES_U3R8(mmu.get_memory(R.HL), 5))
 
 
 def RES_CBAF():
@@ -2412,7 +2605,7 @@ def RES_CBB5():
 
 def RES_CBB6():
     """RES 6,[HL]"""
-    pass
+    mmu.set_memory(R.HL, RES_U3R8(mmu.get_memory(R.HL), 6))
 
 
 def RES_CBB7():
@@ -2452,7 +2645,7 @@ def RES_CBBD():
 
 def RES_CBBE():
     """RES 7,[HL]"""
-    pass
+    mmu.set_memory(R.HL, RES_U3R8(mmu.get_memory(R.HL), 7))
 
 
 def RES_CBBF():
@@ -2500,7 +2693,7 @@ def SET_CBC5():
 
 def SET_CBC6():
     """SET 0,[HL]"""
-    pass
+    mmu.set_memory(R.HL, SET_U3R8(mmu.get_memory(R.HL), 0))
 
 
 def SET_CBC7():
@@ -2540,7 +2733,7 @@ def SET_CBCD():
 
 def SET_CBCE():
     """SET 1,[HL]"""
-    pass
+    mmu.set_memory(R.HL, SET_U3R8(mmu.get_memory(R.HL), 1))
 
 
 def SET_CBCF():
@@ -2580,7 +2773,7 @@ def SET_CBD5():
 
 def SET_CBD6():
     """SET 2,[HL]"""
-    pass
+    mmu.set_memory(R.HL, SET_U3R8(mmu.get_memory(R.HL), 2))
 
 
 def SET_CBD7():
@@ -2620,7 +2813,7 @@ def SET_CBDD():
 
 def SET_CBDE():
     """SET 3,[HL]"""
-    pass
+    mmu.set_memory(R.HL, SET_U3R8(mmu.get_memory(R.HL), 3))
 
 
 def SET_CBDF():
@@ -2660,7 +2853,7 @@ def SET_CBE5():
 
 def SET_CBE6():
     """SET 4,[HL]"""
-    pass
+    mmu.set_memory(R.HL, SET_U3R8(mmu.get_memory(R.HL), 4))
 
 
 def SET_CBE7():
@@ -2700,7 +2893,7 @@ def SET_CBED():
 
 def SET_CBEE():
     """SET 5,[HL]"""
-    pass
+    mmu.set_memory(R.HL, SET_U3R8(mmu.get_memory(R.HL), 5))
 
 
 def SET_CBEF():
@@ -2740,7 +2933,7 @@ def SET_CBF5():
 
 def SET_CBF6():
     """SET 6,[HL]"""
-    pass
+    mmu.set_memory(R.HL, SET_U3R8(mmu.get_memory(R.HL), 6))
 
 
 def SET_CBF7():
@@ -2780,7 +2973,7 @@ def SET_CBFD():
 
 def SET_CBFE():
     """SET 7,[HL]"""
-    pass
+    mmu.set_memory(R.HL, SET_U3R8(mmu.get_memory(R.HL), 7))
 
 
 def SET_CBFF():
@@ -2791,14 +2984,14 @@ def SET_CBFF():
 def CALL_CC(value):
     """CALL Z,n16"""
     if R.ZERO == 1:
-        R.push(R.PC)
+        R.PUSH(R.PC)
         JP_C3(value)
 
 
 def CALL_CD(value):
     """CALL n16"""
+    R.PUSH(R.PC)
     # NOTE: Must ensure PC is currently the address after CALL
-    R.push(R.PC)
     JP_C3(value)
 
 
@@ -2813,6 +3006,11 @@ def RET_D0():
         JP_C3(R.POP())
 
 
+def POP_D1():
+    """POP DE"""
+    R.DE = R.POP()
+
+
 def JP_D2(value):
     """JP NC,n16"""
     if R.CARRY == 0:
@@ -2822,8 +3020,13 @@ def JP_D2(value):
 def CALL_D4(value):
     """CALL NC,n16"""
     if R.CARRY == 0:
-        R.push(R.PC)
+        R.PUSH(R.PC)
         JP_C3(value)
+
+
+def PUSH_D5():
+    """PUSH DE"""
+    R.PUSH(R.DE)
 
 
 def SUB_D6(value):
@@ -2846,7 +3049,7 @@ def JP_DA(value):
 def CALL_DC(value):
     """CALL C,n16"""
     if R.CARRY == 1:
-        R.push(R.PC)
+        R.PUSH(R.PC)
         JP_C3(value)
 
 
@@ -2857,7 +3060,22 @@ def SBC_DE(value):
 
 def LDH_E0(value):
     """LDH [n8],A"""
-    RAM[0xFF00 + value] = R.A
+    mmu.set_memory(0xFF00 + value, R.A)
+
+
+def POP_E1():
+    """POP HL"""
+    R.HL = R.POP()
+
+
+def LDH_E2():
+    """LDH [C],A"""
+    mmu.set_memory(0xFF00 + R.C, R.A)
+
+
+def PUSH_E5():
+    """PUSH HL"""
+    R.PUSH(R.HL)
 
 
 def AND_E6(value):
@@ -2872,7 +3090,7 @@ def JP_E9():
 
 def LD_EA(value):
     """LD [n16],A"""
-    RAM[value] = R.A
+    mmu.set_memory(value, R.A)
 
 
 def XOR_EE(value):
@@ -2882,13 +3100,28 @@ def XOR_EE(value):
 
 def LDH_F0(value):
     """LDH A,[n8]"""
-    R.A = RAM[0xFF00 + value]
+    R.A = mmu.get_memory(0xFF00 + value)
+
+
+def POP_F1():
+    """POP AF"""
+    R.AF = R.POP()
+
+
+def LDH_F2():
+    """LDH A,[C]"""
+    R.A = mmu.get_memory(0xFF00 + R.C)
 
 
 def DI_F3():
     """DI"""
     global IME
-    IME = 0
+    IME = False
+
+
+def PUSH_F5():
+    """PUSH AF"""
+    R.PUSH(R.AF)
 
 
 def OR_F6(value):
@@ -2899,7 +3132,7 @@ def OR_F6(value):
 def EI_FB():
     """EI"""
     global IME
-    IME = 1
+    IME = True
 
 
 def CP_FE(value):
@@ -2911,34 +3144,44 @@ def CP_FE(value):
 
 # region CPU Logic
 
-def opcode_output(PC, opcode):
-    ops = []
-    for operand in opcode['operands']:
-        if 'bytes' in operand:
-            ops.append(int_to_hex(int.from_bytes(
-                bytes(RAM[PC+1:PC+1+int(operand['bytes'])])[::-1])))
-            continue
-    return ops
-
-
 def int_to_hex(value):
     return '0x' + hex(value)[2:].zfill(2).upper()
 
 
-while R.PC < len(RAM):
+while R.PC < len(mmu.RAM):
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
     if R.PC >= 0x104 and R.PC < 0x150:
         # TODO CARTRIDGE HEADER
         incPC(1)
         continue
 
-    data = RAM[R.PC]
+    data = mmu.RAM[R.PC]
     if (data == 0xCB):
-        data = RAM[R.PC + 1]
+        data = mmu.RAM[R.PC + 1]
         opcode = opcodes['cbprefixed'][int_to_hex(data)]
         incPC(opcode['bytes'] + 1)
+        
+        print(int_to_hex(R.PC), int_to_hex(data),
+          opcode['mnemonic'], [int_to_hex(c) for c in got_data])
+        
+        match data:
+            case 0x11:
+                RL_CB11()
+            case 0x7C:
+                BIT_CB7C()
+            case _:
+                raise Exception(f"Unknown Instruction: {int_to_hex(data)}")
+        
+        R.debug()
         continue
+
+
     opcode = opcodes['unprefixed'][int_to_hex(data)]
-    got_data = [int.from_bytes(bytes(RAM[R.PC+1:R.PC+1+int(operand['bytes'])]), 'little')
+    got_data = [int.from_bytes(bytes(mmu.RAM[R.PC + 1:R.PC + 1 + int(operand['bytes'])]), 'little')
                 for operand in opcode['operands'] if 'bytes' in operand]
 
     # DEBUG
@@ -2993,6 +3236,8 @@ while R.PC < len(RAM):
             JR_20(got_data[0])
         case 0x21:
             LD_21(got_data[0])
+        case 0x22:
+            LD_22()
         case 0x23:
             INC_23()
         case 0x26:
@@ -3009,6 +3254,8 @@ while R.PC < len(RAM):
             JR_30(got_data[0])
         case 0x31:
             LD_31(got_data[0])
+        case 0x32:
+            LD_32()
         case 0x33:
             INC_33()
         case 0x38:
@@ -3275,12 +3522,16 @@ while R.PC < len(RAM):
             CP_BF()
         case 0xC0:
             RET_C0()
+        case 0xC1:
+            POP_C1()
         case 0xC2:
             JP_C2(got_data[0])
         case 0xC3:
             JP_C3(got_data[0])
         case 0xC4:
             CALL_C4(got_data[0])
+        case 0xC5:
+            PUSH_C5()
         case 0xC8:
             RET_C8()
         case 0xC9:
@@ -3293,20 +3544,36 @@ while R.PC < len(RAM):
             CALL_CD(got_data[0])
         case 0xD0:
             RET_D0()
+        case 0xD1:
+            POP_D1()
         case 0xD4:
             CALL_D4(got_data[0])
+        case 0xD5:
+            PUSH_D5()
         case 0xD8:
             RET_D8()
         case 0xDC:
             CALL_DC(got_data[0])
         case 0xE0:
             LDH_E0(got_data[0])
+        case 0xE1:
+            POP_E1()
+        case 0xE2:
+            LDH_E2()
+        case 0xE5:
+            PUSH_E5()
         case 0xEA:
             LD_EA(got_data[0])
         case 0xF0:
             LDH_F0(got_data[0])
+        case 0xF1:
+            POP_F1()
+        case 0xF2:
+            LDH_F2()
         case 0xF3:
             DI_F3()
+        case 0xF5:
+            PUSH_F5()
         case 0xF6:
             OR_F6(got_data[0])
         case 0xFB:
@@ -3316,29 +3583,8 @@ while R.PC < len(RAM):
         case _:
             raise Exception(f"Unknown Instruction: {int_to_hex(data)}")
 
+    # ppu.tick()
+
     R.debug()
-
-
-# clear_display()
-# TILE_TEST = "FF 00 7E FF 85 81 89 83 93 85 A5 8B C9 97 7E FF 3C 7E 42 42 42 42 42 42 7E 5E 7E 0A 7C 56 38 7C"
-# byte_data = hexstring_to_bytearray(TILE_TEST)
-# for c in range(len(byte_data)):
-#     if c % 16 != 0:
-#         continue
-#     tile = get_tile(byte_data[c:c+16])
-#     draw_tile((c // 16, 0), tile)
-# update_display()
-
-# while True:
-#     for event in pygame.event.get():
-#         if event.type == pygame.QUIT:
-#             pygame.quit()
-#             sys.exit()
-#         # if event.type == pygame.KEYDOWN:
-#         #     if event.scancode in keycodes.keys():
-#         #         KEYS[keycodes[event.scancode]] = 1
-#         # if event.type == pygame.KEYUP:
-#         #     if event.scancode in keycodes.keys():
-#         #         KEYS[keycodes[event.scancode]] = 0
 
 # endregion
