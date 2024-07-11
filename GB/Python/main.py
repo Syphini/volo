@@ -3,359 +3,29 @@ import json
 import pygame
 import time
 import traceback
+import helpers
+from mmu import MMU
+from registers import Registers
 
 print()
 
-with open('GB/opcodes.json') as f:
+with open("GB/opcodes.json") as f:
     opcodes = json.loads(f.read())
 
-ROM_FILE = 'GB/ROM/DMG_ROM.bin'
+ROM_FILE = "GB/ROM/DMG_ROM.bin"
 
 # region Registers
 
-
-class Registers:
-    def __init__(self):
-        self.A = 0x01
-        self.B = 0x00
-        self.C = 0x13
-        self.D = 0x00
-        self.E = 0xD8
-        self.H = 0x01
-        self.L = 0x4D
-
-        self.PC = 0x0  # Boot ROM is 0x0; Cartridge is 0x100
-        self.SP = 0xFFFE
-
-        self.ZERO = 1
-        self.SUBTRACTION = 0
-        self.HALFCARRY = 1  # temp
-        self.CARRY = 1  # temp
-
-    @property
-    def AF(self):
-        return self.A << 8 | (self.ZERO << 7 | self.SUBTRACTION << 6 | self.HALFCARRY << 5 | self.CARRY << 4)
-
-    @property
-    def BC(self):
-        return self.B << 8 | self.C
-
-    @BC.setter
-    def BC(self, value: int):
-        self.B = value >> 8
-        self.C = value & 0b11111111
-
-    @property
-    def DE(self):
-        return self.D << 8 | self.E
-
-    @DE.setter
-    def DE(self, value: int):
-        self.D = value >> 8
-        self.E = value & 0b11111111
-
-    @property
-    def HL(self):
-        return self.H << 8 | self.L
-
-    @HL.setter
-    def HL(self, value: int):
-        self.H = value >> 8
-        self.L = value & 0b11111111
-
-    def PUSH(self, value: int):
-        self.SP -= 1
-        mmu.set_memory(self.SP, value >> 8)
-
-        self.SP -= 1
-        mmu.set_memory(self.SP, value & 0xFF)
-
-    def POP(self):
-        lower = mmu.get_memory(self.SP)
-        self.SP += 1
-
-        higher = mmu.get_memory(self.SP)
-        self.SP += 1
-
-        return higher << 8 | lower
-
-    def debug(self):
-        data = {'A': self.A, 'B': self.B, 'C': self.C, 'D': self.D,
-                'E': self.E, 'F': 0, 'H': self.H, 'L': self.L, 'PC': self.PC, 'SP': self.SP}
-        print([{c: hex(data[c])} for c in data])
-        print({'Z': R.ZERO, 'N': R.SUBTRACTION, 'H': R.HALFCARRY, 'C': R.CARRY})
-
-        mmu.dump()
-
-
-class PPU:
-    def __init__(self):
-        self.LCDC = 0x91  # FF40
-        self.STAT = 0x85  # FF41
-        self.SCY = 0x00  # FF42
-        self.SCX = 0x00  # FF43
-        self._LY = 0x00  # FF44 -- read-only
-        self.LYC = 0x00  # FF45
-        self.DMA = 0x00  # FF46
-        self.BGP = 0xFC  # FF47
-        self.OBP0 = 0x00  # FF48
-        self.OBP1 = 0x00  # FF49
-        self.WY = 0x00  # FF4A
-        self.WX = 0x00  # FF4B
-
-        self._MODE = 2
-        self._LX = 0x0
-        self._TILEMAP = 0x9800
-        self._FRAMETICK = 0
-
-    def get(self, addr):
-        match addr:
-            case 0xFF40:
-                return self.LCDC
-            case 0xFF41:
-                return self.STAT
-            case 0xFF42:
-                return self.SCY
-            case 0xFF43:
-                return self.SCX
-            case 0xFF44:
-                return self._LY
-            case 0xFF45:
-                return self.LYC
-            case 0xFF46:
-                return self.DMA
-            case 0xFF47:
-                return self.BGP
-            case 0xFF48:
-                return self.OBP0
-            case 0xFF49:
-                return self.OBP1
-            case 0xFF4A:
-                return self.WY
-            case 0xFF4B:
-                return self.WX
-            case _:
-                raise Exception("Unknown IO Register:", addr)
-
-    def set(self, addr, value):
-        match addr:
-            case 0xFF40:
-                self.LCDC = value
-            case 0xFF41:
-                self.STAT = value
-            case 0xFF42:
-                self.SCY = value
-            case 0xFF43:
-                self.SCX = value
-            case 0xFF45:
-                self.LYC = value
-            case 0xFF46:
-                self.DMA = value
-            case 0xFF47:
-                self.BGP = value
-            case 0xFF48:
-                self.OBP0 = value
-            case 0xFF49:
-                self.OBP1 = value
-            case 0xFF4A:
-                self.WY = value
-            case 0xFF4B:
-                self.WX = value
-            case _:
-                raise Exception("Unknown IO Register:", addr)
-
-    # Tilemap 1 9800 -> 9BFF
-    # Tilemap 2 9C00 -> 9FFF
-
-    def tick(self):
-        draw_vram()
-        # match self._MODE:
-        #     case 2:  # OAM
-        #         if self._FRAMETICK == 40:
-        #             self._LX = 0
-                    
-
-        #             self._MODE = 3
-        #     case 3:  # Pixel
-
-        #         # Pixel Fetcher
-
-        #         self._LX += 1
-        #         if self._LX == 160:
-        #             self._MODE = 0
-        #     case 0:  # H-Blank
-        #         if self._FRAMETICK == 456:
-        #             self._FRAMETICK = 0
-        #             self._LY += 1
-        #             if self._LY == 144:
-        #                 self._MODE = 1
-        #             else:
-        #                 self._MODE = 2
-        #     case 1:  # V-Blank
-        #         if self._FRAMETICK == 456:
-        #             self._FRAMETICK = 0
-        #             self._LY += 1
-        #             if self._LY == 153:
-        #                 self._LY = 0
-        #                 self._MODE = 2
-
-        # self._FRAMETICK += 1
-        update_display()
-
-
-class IORegisters:
-    def __init__(self):
-        lcd = PPU()
-
-        self.P1 = 0xCF  # FF00
-        self.SB = 0x00  # FF01
-        self.SC = 0x73  # FF02
-        self.DIV = 0xAB  # FF04
-        self.TIMA = 0x00  # FF05
-        self.TMA = 0x00  # FF06
-        self.TAC = 0xF8  # FF07
-        self.IF = 0xE1  # FF0F
-        self.NR10 = 0x80  # FF10
-        self.NR11 = 0xBF  # FF11
-        self.NR12 = 0xF3  # FF12
-        self.NR13 = 0xFF  # FF13
-        self.NR14 = 0xBF  # FF14
-        self.NR21 = 0x3F  # FF16
-        self.RN22 = 0x00  # FF17
-        self.NR23 = 0xFF  # FF18
-        self.NR24 = 0xBF  # FF19
-        self.NR30 = 0x7F  # FF1A
-        self.NR31 = 0xFF  # FF1B
-        self.NR32 = 0x9F  # FF1C
-        self.NR33 = 0xFF  # FF1D
-        self.NR34 = 0xBF  # FF1E
-        self.NR41 = 0xFF  # FF20
-        self.NR42 = 0x00  # FF21
-        self.NR43 = 0x00  # FF22
-        self.NR44 = 0xBF  # FF23
-        self.NR50 = 0x77  # FF24
-        self.NR51 = 0xF3  # FF25
-        self.NR52 = 0xF1  # FF26
-        self.LCD = lcd  # FF40 -> FF4B
-        # ???
-        self.IE = 0x00  # FFFF
-
-
-R = Registers()
-
-
-def setPC(value: int):
-    R.PC = value
-
-
-def incPC(value: int):
-    setPC(R.PC + value)
-
-
-def getLowerNibble(value: int):
-    return value & 0b1111
-
-
-# endregion
-
-class MMU:
-    def __init__(self):
-
-        io = IORegisters()
-
-        self.RAM = bytearray(0x8000)  # 0000 -> 7FFF
-        self.VRAM = bytearray(0x2000)  # 8000 -> 9FFF
-        self.ERAM = bytearray(0x2000)  # A000 -> BFFF
-        self.WRAM = bytearray(0x2000)  # C000 -> DFFF
-        self.ECHO = bytearray(0x1E00)  # E000 -> FDFF
-        self.OAM = bytearray(0xA0)  # FE00 -> FE9F
-        self.EMPTY = bytearray(0x60)  # FEA0 -> FEFF
-        self.IO = io  # FF00 -> FF7F
-        self.HRAM = bytearray(0x7F)  # FF80 -> FFFE
-        self.IE = False  # FFFF
-
-    def get_memory(self, address):
-        match address:
-            case addr if 0x0000 <= addr <= 0x7FFF:
-                return self.RAM[address]
-            case addr if 0x8000 <= addr <= 0x9FFF:
-                return self.VRAM[address - 0x8000]
-            case addr if 0xA000 <= addr <= 0xBFFF:
-                return self.ERAM[address - 0xA000]
-            case addr if 0xC000 <= addr <= 0xDFFF:
-                return self.WRAM[address - 0xC000]
-            case addr if 0xE000 <= addr <= 0xFDFF:
-                return self.OAM[address - 0xE000]
-            case addr if 0xFE00 <= addr <= 0xFE9F:
-                return self.ECHO[address - 0xFE00]
-            case 0xFF00:
-                return self.IO.P1
-            case addr if 0xFF10 <= addr <= 0xFF26:
-                print("TODO handle audio registers", hex(address))
-            case addr if 0xFF40 <= addr <= 0xFF4B:
-                return self.IO.LCD.get(addr)
-            case addr if 0xFF80 <= addr <= 0xFFFE:
-                return self.HRAM[address - 0xFF80]
-            case 0xFFFF:
-                return self.IE
-            case _:
-                print('TODO HANDLE REGISTERS', hex(address))
-                return 0x00
-                #raise Exception("Inaccessible Memory:", hex(address))
-
-    def set_memory(self, address, value):
-        match address:
-            case addr if 0x0000 <= addr <= 0x7FFF:
-                self.RAM[address] = value
-            case addr if 0x8000 <= addr <= 0x9FFF:
-                self.VRAM[address - 0x8000] = value
-            case addr if 0xA000 <= addr <= 0xBFFF:
-                self.ERAM[address - 0xA000] = value
-            case addr if 0xC000 <= addr <= 0xDFFF:
-                self.WRAM[address - 0xC000] = value
-            case addr if 0xE000 <= addr <= 0xFDFF:
-                self.OAM[address - 0xE000] = value
-            case addr if 0xFE00 <= addr <= 0xFE9F:
-                self.ECHO[address - 0xFE00] = value
-            case 0xFF00:
-                self.IO.P1 = value
-            case addr if 0xFF10 <= addr <= 0xFF26:
-                print("TODO handle audio registers", hex(address))
-            case addr if 0xFF40 <= addr <= 0xFF4B:
-                self.IO.LCD.set(addr, value)
-            case addr if 0xFF80 <= addr <= 0xFFFE:
-                self.HRAM[address - 0xFF80] = value
-            case 0xFFFF:
-                self.IE = value
-            case _:
-                print('TODO HANDLE REGISTERS', hex(address))
-                #raise Exception("Inaccessible Memory:", hex(address))
-
-    def dump(self):
-        # Hex Dump
-        with open('GB\ROM\dump.md', 'w') as f:
-            dump = bytearray.hex(self.RAM + self.VRAM + self.ERAM +
-                                 self.WRAM + self.OAM + self.ECHO + self.EMPTY + bytearray(0x80) + self.HRAM, ' ').upper()
-            n = 48
-            data = [f"{int_to_hex(i//3)} -- {dump[i:i+n]
-                                             }" for i in range(0, len(dump), n)]
-            f.write('\n'.join(data))
-
-
 mmu = MMU()
+R = Registers(mmu)
 
 IME = False
 
-with open(ROM_FILE, 'rb') as f:
-    for (cycle_count, b) in enumerate(f.read()):
+# endregion
+
+with open(ROM_FILE, "rb") as f:
+    for cycle_count, b in enumerate(f.read()):
         mmu.set_memory(cycle_count, b)
-
-
-def hexstring_to_bytearray(hex_data):
-    data = bytearray()
-    for c in bytes.fromhex(hex_data):
-        data.append(c)
-    return data
 
 # region Graphics
 
@@ -372,8 +42,7 @@ SCREEN_Y = 256
 CANVAS_SIZE = (SCREEN_X * PIXEL_SIZE, SCREEN_Y * PIXEL_SIZE)
 
 # Pixel States
-PIXEL_STATE = [(255, 246, 211), (249, 168, 117),
-               (235, 107, 111), (124, 63, 88)]
+PIXEL_STATE = [(255, 246, 211), (249, 168, 117), (235, 107, 111), (124, 63, 88)]
 
 # Canvas
 canvas = pygame.display.set_mode(CANVAS_SIZE)
@@ -387,13 +56,13 @@ def get_tile(byte_data: bytearray):
             continue
 
         BYTE_1 = byte_data[c]
-        BYTE_2 = byte_data[c+1]
+        BYTE_2 = byte_data[c + 1]
 
         colour_ids = []
         for i in range(8):
             b1 = bin(BYTE_1)[2:].zfill(8)
             b2 = bin(BYTE_2)[2:].zfill(8)
-            calc = (b2[i] + b1[i])
+            calc = b2[i] + b1[i]
             colour_ids.append(int(calc, 2))
 
         TILE_DATA.append(colour_ids)
@@ -408,7 +77,8 @@ def draw_vram():
             tileIndex = mmu.VRAM[(0x1800 + (y * 32) + x)]
             if tileIndex != 0:
                 tileData = get_tile(
-                    mmu.VRAM[tileIndex * 16:((tileIndex + 1) * 16) - 1])
+                    mmu.VRAM[tileIndex * 16 : ((tileIndex + 1) * 16) - 1]
+                )
                 draw_tile((offset_x + x, y), tileData)
 
 
@@ -430,23 +100,21 @@ def draw(x_y, colour_id):
     x = x_y[0] * PIXEL_SIZE
     y = x_y[1] * PIXEL_SIZE
 
-    canvas.fill(PIXEL_STATE[colour_id], pygame.Rect(
-        x, y, PIXEL_SIZE, PIXEL_SIZE))
+    canvas.fill(PIXEL_STATE[colour_id], pygame.Rect(x, y, PIXEL_SIZE, PIXEL_SIZE))
 
 
 def draw_tile(x_y, tile_data):
     """Draw a Tile to the canvas"""
     x_offset = x_y[0] * TILE_SIZE
     y_offset = x_y[1] * TILE_SIZE
-    for (y, t) in enumerate(tile_data):
-        for (x, i) in enumerate(t):
+    for y, t in enumerate(tile_data):
+        for x, i in enumerate(t):
             draw(((x + x_offset), y + y_offset), i)
 
 
 def clear_display():
     """Clear the canvas"""
-    canvas.fill(PIXEL_STATE[0], pygame.Rect(
-        0, 0, CANVAS_SIZE[0], CANVAS_SIZE[1]))
+    canvas.fill(PIXEL_STATE[0], pygame.Rect(0, 0, CANVAS_SIZE[0], CANVAS_SIZE[1]))
 
 
 # endregion
@@ -479,9 +147,11 @@ def INC_R8(register):
     calc = initial + 1
     final = calc % 256
     R.ZERO = 1 if final == 0 else 0
-    R.SUBTRACTION = 0,
-    R.HALFCARRY = 1 if getLowerNibble(initial) > getLowerNibble(calc) else 0
-    incPC(1)
+    R.SUBTRACTION = (0,)
+    R.HALFCARRY = (
+        1 if helpers.getLowerNibble(initial) > helpers.getLowerNibble(calc) else 0
+    )
+    R.INCREMENT_PC(1)
     return final
 
 
@@ -495,8 +165,10 @@ def DEC_R8(register):
     calc = initial - 1
     final = calc % 256
     R.ZERO = 1 if final == 0 else 0
-    R.SUBTRACTION = 1,
-    R.HALFCARRY = 1 if getLowerNibble(calc) > getLowerNibble(initial) else 0
+    R.SUBTRACTION = (1,)
+    R.HALFCARRY = (
+        1 if helpers.getLowerNibble(calc) > helpers.getLowerNibble(initial) else 0
+    )
     return final
 
 
@@ -512,12 +184,12 @@ def LD_06(value):
 
 def RLCA_07():
     initial = R.A
-    carryBit = (initial >> 7)
+    carryBit = initial >> 7
     calc = (initial << 1) & 0b11111110 | carryBit
     R.A = calc
     R.ZERO = 0
     R.SUBTRACTION = 0
-    R. HALFCARRY = 0
+    R.HALFCARRY = 0
     R.CARRY = carryBit
 
 
@@ -557,7 +229,7 @@ def LD_0E(value):
 
 def RRCA_0F():
     initial = R.A
-    carryBit = (initial & 0b1)
+    carryBit = initial & 0b1
     calc = (carryBit << 7) | initial >> 1
     R.A = calc
     R.ZERO = 0
@@ -598,7 +270,7 @@ def LD_16(value):
 
 def RLA_17():
     initial = R.A
-    carryBit = (initial >> 7)
+    carryBit = initial >> 7
     calc = (initial << 1) & 0b11111110 | R.CARRY
     R.A = calc
     R.ZERO = 0
@@ -611,9 +283,9 @@ def JR_18(value):
     """JR e8"""
     if (value & (1 << 7)) != 0:
         addr = -(128 - (value - (1 << 7)))
-        incPC(addr)
+        R.INCREMENT_PC(addr)
         return
-    incPC(value)
+    R.INCREMENT_PC(value)
 
 
 def ADD_19():
@@ -652,7 +324,7 @@ def LD_1E(value):
 
 def RRA_1F(register):
     initial = register
-    carryBit = (initial & 0b1)
+    carryBit = initial & 0b1
     calc = (R.CARRY << 7) | initial >> 1
     R.ZERO = 0
     R.SUBTRACTION = 0
@@ -1110,7 +782,7 @@ def LD_75():
 
 def HALT_76():
     """HALT"""
-    raise Exception('HALT')
+    raise Exception("HALT")
 
 
 def LD_77():
@@ -1165,7 +837,9 @@ def ADD_A_N8(value):
     R.A = final
     R.ZERO = 1 if final == 0 else 0
     R.SUBTRACTION = 0
-    R.HALFCARRY = 1 if getLowerNibble(initial) > getLowerNibble(value) else 0
+    R.HALFCARRY = (
+        1 if helpers.getLowerNibble(initial) > helpers.getLowerNibble(value) else 0
+    )
     R.CARRY = 1 if calc > 255 else 0
 
 
@@ -1217,7 +891,9 @@ def ADC_A_N8(value):
     R.A = final
     R.ZERO = 1 if final == 0 else 0
     R.SUBTRACTION = 0
-    R.HALFCARRY = 1 if getLowerNibble(initial) > getLowerNibble(value) else 0
+    R.HALFCARRY = (
+        1 if helpers.getLowerNibble(initial) > helpers.getLowerNibble(value) else 0
+    )
     R.CARRY = 1 if calc > 255 else 0
 
 
@@ -1268,7 +944,9 @@ def SUB_A_N8(value):
     R.A = final
     R.ZERO = 1 if final == 0 else 0
     R.SUBTRACTION = 1
-    R.HALFCARRY = 1 if getLowerNibble(value) > getLowerNibble(initial) else 0
+    R.HALFCARRY = (
+        1 if helpers.getLowerNibble(value) > helpers.getLowerNibble(initial) else 0
+    )
     R.CARRY = 1 if calc < 0 else 0
 
 
@@ -1320,7 +998,9 @@ def SBC_A_N8(value):
     R.A = final
     R.ZERO = 1 if final == 0 else 0
     R.SUBTRACTION = 1
-    R.HALFCARRY = 1 if getLowerNibble(value) > getLowerNibble(initial) else 0
+    R.HALFCARRY = (
+        1 if helpers.getLowerNibble(value) > helpers.getLowerNibble(initial) else 0
+    )
     R.CARRY = 1 if calc < 0 else 0
 
 
@@ -1520,7 +1200,9 @@ def CP_A_N8(value):
     final = calc % 256
     R.ZERO = 1 if final == 0 else 0
     R.SUBTRACTION = 1
-    R.HALFCARRY = 1 if getLowerNibble(value) > getLowerNibble(initial) else 0
+    R.HALFCARRY = (
+        1 if helpers.getLowerNibble(value) > helpers.getLowerNibble(initial) else 0
+    )
     R.CARRY = 1 if calc < 0 else 0
 
 
@@ -1578,12 +1260,12 @@ def POP_C1():
 def JP_C2(value):
     """JP NZ,n16"""
     if R.ZERO == 0:
-        setPC(value)
+        R.PC = value
 
 
 def JP_C3(value):
     """JP n16"""
-    setPC(value)
+    R.PC = value
 
 
 def CALL_C4(value):
@@ -1617,12 +1299,12 @@ def RET_C9():
 def JP_CA(value):
     """JP Z,n16"""
     if R.ZERO == 1:
-        setPC(value)
+        R.PC = value
 
 
 def RLC_R8(value):
     initial = value
-    carryBit = (initial >> 7)
+    carryBit = initial >> 7
     calc = (initial << 1) & 0b11111110 | carryBit
     R.ZERO = 1 if calc == 0 else 0
     R.SUBTRACTION = 0
@@ -1673,7 +1355,7 @@ def RLC_CB07():
 
 def RRC_R8(register):
     initial = register
-    carryBit = (initial & 0b1)
+    carryBit = initial & 0b1
     calc = (carryBit << 7) | initial >> 1
     R.ZERO = 1 if calc == 0 else 0
     R.SUBTRACTION = 0
@@ -1724,7 +1406,7 @@ def RRC_CB0F():
 
 def RL_R8(register):
     initial = register
-    carryBit = (initial >> 7)
+    carryBit = initial >> 7
     calc = (initial << 1) & 0b11111110 | R.CARRY
     R.ZERO = 1 if calc == 0 else 0
     R.SUBTRACTION = 0
@@ -1775,7 +1457,7 @@ def RL_CB17():
 
 def RR_R8(register):
     initial = register
-    carryBit = (initial & 0b1)
+    carryBit = initial & 0b1
     calc = (R.CARRY << 7) | initial >> 1
     R.ZERO = 1 if calc == 0 else 0
     R.SUBTRACTION = 0
@@ -1826,7 +1508,7 @@ def RR_CB1F():
 
 def SLA_R8(register):
     initial = register
-    carryBit = (initial >> 7)
+    carryBit = initial >> 7
     calc = (initial << 1) & 0b11111110
     R.ZERO = 1 if calc == 0 else 0
     R.SUBTRACTION = 0
@@ -1877,7 +1559,7 @@ def SLA_CB27():
 
 def SRA_R8(register):
     initial = register
-    carryBit = (initial & 0b1)
+    carryBit = initial & 0b1
     calc = (initial >> 7) << 7 | initial >> 1
     R.ZERO = 1 if calc == 0 else 0
     R.SUBTRACTION = 0
@@ -1978,7 +1660,7 @@ def SWAP_CB37():
 
 def SRL_R8(register):
     initial = register
-    carryBit = (initial & 0b1)
+    carryBit = initial & 0b1
     calc = initial >> 1 & 0b011111111
     R.ZERO = 1 if calc == 0 else 0
     R.SUBTRACTION = 0
@@ -3044,7 +2726,7 @@ def POP_D1():
 def JP_D2(value):
     """JP NC,n16"""
     if R.CARRY == 0:
-        setPC(value)
+        R.PC = value
 
 
 def CALL_D4(value):
@@ -3073,7 +2755,7 @@ def RET_D8():
 def JP_DA(value):
     """JP C,n16"""
     if R.CARRY == 1:
-        setPC(value)
+        R.PC = value
 
 
 def CALL_DC(value):
@@ -3115,10 +2797,10 @@ def AND_E6(value):
 
 def JP_E9():
     """JP HL"""
-    setPC(R.HL)
+    R.PC = R.HL
 
 
-def LD_EA(value : int):
+def LD_EA(value: int):
     """LD [n16],A"""
     mmu.set_memory(value, R.A)
 
@@ -3169,47 +2851,59 @@ def CP_FE(value):
     """CP A,n8"""
     CP_A_N8(value)
 
+
 # endregion
 
+# region DEBUG
 opTimes = 0
 ppuTimes = 0
 allTimes = 0
+# endregion
 
 # region CPU Logic
-
-def int_to_hex(value):
-    return '0x' + hex(value)[2:].zfill(2).upper()
-
 
 clear_display()
 
 try:
     while R.PC < len(mmu.RAM):
+        # region DEBUG
         allTime = time.time() * 1000
+        # endregion
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 mmu.dump()
                 pygame.quit()
                 sys.exit()
-        
+
+        # region DEBUG
         opTime = time.time() * 1000
+        # endregion
 
         if R.PC >= 0x104 and R.PC < 0x150:
             # TODO CARTRIDGE HEADER
-            incPC(1)
+            R.INCREMENT_PC(1)
             continue
 
+        # region DEBUG
         R.debug()
+        # endregion
 
+        # region I hate all of this
         data = mmu.get_memory(R.PC)
-        if (data == 0xCB):
+        if data == 0xCB:
             data = mmu.get_memory(R.PC + 1)
-            opcode = opcodes['cbprefixed'][int_to_hex(data)]
-            incPC(opcode['bytes'])  # ??? don't add +1
+            opcode = opcodes["cbprefixed"][helpers.int_to_hex(data)]
+            R.INCREMENT_PC(opcode["bytes"])  # ??? don't add +1
 
-            print(int_to_hex(R.PC), int_to_hex(data),
-                opcode['mnemonic'], [int_to_hex(c) for c in got_data])
+            # region DEBUG
+            print(
+                helpers.int_to_hex(R.PC),
+                helpers.int_to_hex(data),
+                opcode["mnemonic"],
+                [helpers.int_to_hex(c) for c in got_data],
+            )
+            # endregion
 
             match data:
                 case 0x11:
@@ -3343,22 +3037,32 @@ try:
                 case 0x7F:
                     BIT_CB7F()
                 case _:
-                    raise Exception(f"Unknown Instruction: {int_to_hex(data)}")
+                    raise Exception(f"Unknown Instruction: {helpers.int_to_hex(data)}")
 
             mmu.IO.LCD.tick()
 
-            # R.debug()
             continue
 
-        opcode = opcodes['unprefixed'][int_to_hex(data)]
-        got_data = [int.from_bytes(bytes(mmu.RAM[R.PC + 1:R.PC + 1 + int(operand['bytes'])]), 'little')
-                    for operand in opcode['operands'] if 'bytes' in operand]
+        opcode = opcodes["unprefixed"][helpers.int_to_hex(data)]
+        # TODO what the fuck is this
+        got_data = [
+            int.from_bytes(
+                bytes(mmu.RAM[R.PC + 1 : R.PC + 1 + int(operand["bytes"])]), "little"
+            )
+            for operand in opcode["operands"]
+            if "bytes" in operand
+        ]
 
-        # DEBUG
-        print(int_to_hex(R.PC), int_to_hex(data),
-            opcode['mnemonic'], [int_to_hex(c) for c in got_data])
+        # region DEBUG
+        print(
+            helpers.int_to_hex(R.PC),
+            helpers.int_to_hex(data),
+            opcode["mnemonic"],
+            [helpers.int_to_hex(c) for c in got_data],
+        )
+        # endregion
 
-        incPC(opcode['bytes'])
+        R.INCREMENT_PC(opcode["bytes"])
         match data:
             case 0x00:
                 NOP_00()
@@ -3797,21 +3501,27 @@ try:
             case 0xFE:
                 CP_FE(got_data[0])
             case _:
-                raise Exception(f"Unknown Instruction: {int_to_hex(data)}")
+                raise Exception(f"Unknown Instruction: {helpers.int_to_hex(data)}")
 
+        # endregion
+
+        # region DEBUG
         opTime = (time.time() * 1000) - opTime
         opTimes += opTime
 
         ppuTime = time.time() * 1000
+        # endregion
 
         mmu.IO.LCD.tick()
 
+        # region DEBUG
         ppuTime = (time.time() * 1000) - ppuTime
         ppuTimes += ppuTime
 
         allTime = (time.time() * 1000) - allTime
         allTimes += allTime
-        print({'op': opTimes, 'ppu': ppuTimes, 'all': allTimes})
+        print({"op": opTimes, "ppu": ppuTimes, "all": allTimes})
+        # endregion
 
 except Exception as e:
     traceback.print_exception(e)
