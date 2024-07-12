@@ -100,12 +100,12 @@ class Registers:
             }
         )
 
-        self.mmu.dump()
+        # self.mmu.dump()
 
 
 class IO:
-    def __init__(self):
-        lcd = PPU()
+    def __init__(self, mmu):
+        lcd = PPU(mmu)
 
         self.P1 = 0xCF  # FF00
         self.SB = 0x00  # FF01

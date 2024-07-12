@@ -5,7 +5,7 @@ from registers import IO
 class MMU:
     def __init__(self):
 
-        io = IO()
+        io = IO(self)
 
         self.RAM = bytearray(0x8000)  # 0000 -> 7FFF
         self.VRAM = bytearray(0x2000)  # 8000 -> 9FFF
