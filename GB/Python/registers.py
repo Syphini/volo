@@ -31,6 +31,14 @@ class Registers:
             | self.CARRY << 4
         )
 
+    @AF.setter
+    def AF(self, value: int):
+        self.A = value >> 8
+        self.ZERO = value >> 7 & 1
+        self.SUBTRACTION = value >> 6 & 1
+        self.HALFCARRY = value >> 5 & 1
+        self.CARRY = value >> 4 & 1
+
     @property
     def BC(self):
         return self.B << 8 | self.C
@@ -38,7 +46,7 @@ class Registers:
     @BC.setter
     def BC(self, value: int):
         self.B = value >> 8
-        self.C = value & 0b11111111
+        self.C = value & 0xFF
 
     @property
     def DE(self):
@@ -47,7 +55,7 @@ class Registers:
     @DE.setter
     def DE(self, value: int):
         self.D = value >> 8
-        self.E = value & 0b11111111
+        self.E = value & 0xFF
 
     @property
     def HL(self):
@@ -56,21 +64,21 @@ class Registers:
     @HL.setter
     def HL(self, value: int):
         self.H = value >> 8
-        self.L = value & 0b11111111
+        self.L = value & 0xFF
 
     def PUSH(self, value: int):
-        self.SP -= 1
+        self.SP = (self.SP - 1) % 256
         self.mmu.set_memory(self.SP, value >> 8)
 
-        self.SP -= 1
+        self.SP = (self.SP - 1) % 256
         self.mmu.set_memory(self.SP, value & 0xFF)
 
     def POP(self):
         lower = self.mmu.get_memory(self.SP)
-        self.SP += 1
+        self.SP = (self.SP + 1) % 256
 
         higher = self.mmu.get_memory(self.SP)
-        self.SP += 1
+        self.SP = (self.SP + 1) % 256
 
         return higher << 8 | lower
 
@@ -114,7 +122,6 @@ class IO:
         self.TIMA = 0x00  # FF05
         self.TMA = 0x00  # FF06
         self.TAC = 0xF8  # FF07
-        self.IF = 0xE1  # FF0F
         self.NR10 = 0x80  # FF10
         self.NR11 = 0xBF  # FF11
         self.NR12 = 0xF3  # FF12
@@ -138,4 +145,43 @@ class IO:
         self.NR52 = 0xF1  # FF26
         self.LCD = lcd  # FF40 -> FF4B
         # ???
-        self.IE = 0x00  # FFFF
+
+        self._IF = Interrupts(0xE1)  # FF0F
+        self._IE = Interrupts()  # FFFF
+
+    @property
+    def IE(self):
+        return self._IE.get()
+
+    @IE.setter
+    def IE(self, value):
+        self._IE.set(value)
+
+    @property
+    def IF(self):
+        return self._IF.get()
+
+    @IF.setter
+    def IF(self, value):
+        self._IF.set(value)
+
+
+class Interrupts:
+    def __init__(self, value=0x00):
+        self.set(value)
+
+    def set(self, value):
+        self.JOYPAD = value >> 4 & 1
+        self.SERIAL = value >> 3 & 1
+        self.TIMER = value >> 2 & 1
+        self.LCD = value >> 1 & 1
+        self.VBLANK = value & 1
+
+    def get(self):
+        return (
+            self.JOYPAD << 4
+            | self.SERIAL << 3
+            | self.TIMER << 2
+            | self.LCD << 1
+            | self.VBLANK
+        )

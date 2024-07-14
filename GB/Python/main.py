@@ -8,6 +8,7 @@ from opcodes import Opcodes
 print()
 
 DEBUG = False
+SIMPLE_DEBUG = False
 
 ROM_FILE = "GB/ROM/DMG_ROM.bin"
 
@@ -24,12 +25,6 @@ IME = False
 with open(ROM_FILE, "rb") as f:
     for cycle_count, b in enumerate(f.read()):
         mmu.set_memory(cycle_count, b)
-
-# region DEBUG
-opTimes = 0
-ppuTimes = 0
-allTimes = 0
-# endregion
 
 # region CPU Logic
 
@@ -63,15 +58,16 @@ try:
             R.INCREMENT_PC(opinfo["bytes"])  # ??? don't add +1
 
             # region DEBUG
-            print(
-                helpers.int_to_hex(R.PC),
-                helpers.int_to_hex(PC_DATA),
-                opinfo["mnemonic"],
-                [helpers.int_to_hex(c) for c in got_data],
-            )
+            if SIMPLE_DEBUG:
+                print(
+                    helpers.int_to_hex(R.PC),
+                    helpers.int_to_hex(PC_DATA),
+                    opinfo["mnemonic"],
+                    [helpers.int_to_hex(c) for c in got_data],
+                )
             # endregion
 
-            opcodes.execute_cb(PC_DATA, got_data[0] if len(got_data) > 0 else None)
+            opcodes.execute_cb(PC_DATA)
 
             mmu.IO.LCD.tick()
 
@@ -88,42 +84,25 @@ try:
         ]
 
         # region DEBUG
-        print(
-            helpers.int_to_hex(R.PC),
-            helpers.int_to_hex(PC_DATA),
-            opinfo["mnemonic"],
-            [c["name"] for c in opinfo["operands"]],
-            [helpers.int_to_hex(c) for c in got_data],
-        )
+        if SIMPLE_DEBUG:
+            print(
+                helpers.int_to_hex(R.PC),
+                helpers.int_to_hex(PC_DATA),
+                opinfo["mnemonic"],
+                [c["name"] for c in opinfo["operands"]],
+                [helpers.int_to_hex(c) for c in got_data],
+            )
         # endregion
 
         R.INCREMENT_PC(opinfo["bytes"])
         opcodes.execute(PC_DATA, got_data[0] if len(got_data) > 0 else None)
         # endregion
 
-        # region DEBUG
-        if DEBUG:
-            opTime = (time.time() * 1000) - opTime
-            opTimes += opTime
-
-            ppuTime = time.time() * 1000
-        # endregion
-
         mmu.IO.LCD.tick()
-
-        # region DEBUG
-        if DEBUG:
-            ppuTime = (time.time() * 1000) - ppuTime
-            ppuTimes += ppuTime
-
-            allTime = (time.time() * 1000) - allTime
-            allTimes += allTime
-            print({"op": opTimes, "ppu": ppuTimes, "all": allTimes})
-        # endregion
 
 except Exception as e:
     traceback.print_exception(e)
-    print("Exiting...")
     mmu.dump()
+    print("Exiting...")
 
 # endregion

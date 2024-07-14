@@ -16,7 +16,6 @@ class MMU:
         self.EMPTY = bytearray(0x60)  # FEA0 -> FEFF
         self.IO = io  # FF00 -> FF7F
         self.HRAM = bytearray(0x7F)  # FF80 -> FFFE
-        self.IE = False  # FFFF
 
     def get_memory(self, address):
         match address:
@@ -29,11 +28,13 @@ class MMU:
             case addr if 0xC000 <= addr <= 0xDFFF:
                 return self.WRAM[address - 0xC000]
             case addr if 0xE000 <= addr <= 0xFDFF:
-                return self.OAM[address - 0xE000]
+                return self.ECHO[address - 0xE000]
             case addr if 0xFE00 <= addr <= 0xFE9F:
-                return self.ECHO[address - 0xFE00]
+                return self.OAM[address - 0xFE00]
             case 0xFF00:
                 return self.IO.P1
+            case 0xFF0F:
+                return self.IO.IF
             case addr if 0xFF10 <= addr <= 0xFF26:
                 print("TODO handle audio registers", hex(address))
             case addr if 0xFF40 <= addr <= 0xFF4B:
@@ -41,11 +42,9 @@ class MMU:
             case addr if 0xFF80 <= addr <= 0xFFFE:
                 return self.HRAM[address - 0xFF80]
             case 0xFFFF:
-                return self.IE
+                return self.IO.IE
             case _:
-                print("TODO HANDLE REGISTERS", hex(address))
-                return 0x00
-                # raise Exception("Inaccessible Memory:", hex(address))
+                raise Exception("Inaccessible Memory:", hex(address))
 
     def set_memory(self, address, value):
         match address:
@@ -58,11 +57,13 @@ class MMU:
             case addr if 0xC000 <= addr <= 0xDFFF:
                 self.WRAM[address - 0xC000] = value
             case addr if 0xE000 <= addr <= 0xFDFF:
-                self.OAM[address - 0xE000] = value
+                self.ECHO[address - 0xE000] = value
             case addr if 0xFE00 <= addr <= 0xFE9F:
-                self.ECHO[address - 0xFE00] = value
+                self.OAM[address - 0xFE00] = value
             case 0xFF00:
                 self.IO.P1 = value
+            case 0xFF0F:
+                self.IO.IF = value
             case addr if 0xFF10 <= addr <= 0xFF26:
                 print("TODO handle audio registers", hex(address))
             case addr if 0xFF40 <= addr <= 0xFF4B:
@@ -70,10 +71,9 @@ class MMU:
             case addr if 0xFF80 <= addr <= 0xFFFE:
                 self.HRAM[address - 0xFF80] = value
             case 0xFFFF:
-                self.IE = value
+                self.IO.IE = value
             case _:
-                print("TODO HANDLE REGISTERS", hex(address))
-                # raise Exception("Inaccessible Memory:", hex(address))
+                raise Exception("Inaccessible Memory:", hex(address))
 
     def dump(self):
         # Hex Dump

@@ -30,6 +30,8 @@ class Opcodes:
                 self.LD_06(value)
             case 0x07:
                 self.RLCA_07()
+            case 0x09:
+                self.ADD_09()
             case 0x0A:
                 self.LD_0A()
             case 0x0B:
@@ -402,6 +404,8 @@ class Opcodes:
                 self.CALL_C4(value)
             case 0xC5:
                 self.PUSH_C5()
+            case 0xC6:
+                self.ADD_C6(value)
             case 0xC8:
                 self.RET_C8()
             case 0xC9:
@@ -420,8 +424,12 @@ class Opcodes:
                 self.CALL_D4(value)
             case 0xD5:
                 self.PUSH_D5()
+            case 0xD6:
+                self.SUB_D6(value)
             case 0xD8:
                 self.RET_D8()
+            case 0xD9:
+                self.RETI_D9()
             case 0xDC:
                 self.CALL_DC(value)
             case 0xE0:
@@ -432,6 +440,10 @@ class Opcodes:
                 self.LDH_E2()
             case 0xE5:
                 self.PUSH_E5()
+            case 0xE6:
+                self.AND_E6(value)
+            case 0xE9:
+                self.JP_E9()
             case 0xEA:
                 self.LD_EA(value)
             case 0xF0:
@@ -446,6 +458,8 @@ class Opcodes:
                 self.PUSH_F5()
             case 0xF6:
                 self.OR_F6(value)
+            case 0xFA:
+                self.LD_FA(value)
             case 0xFB:
                 self.EI_FB()
             case 0xFE:
@@ -453,10 +467,136 @@ class Opcodes:
             case _:
                 raise Exception(f"Unknown Instruction: {helpers.int_to_hex(opcode)}")
 
-    def execute_cb(self, opcode, value):
+    def execute_cb(self, opcode):
         match opcode:
+            case 0x00:
+                self.RLC_CB00()
+            case 0x01:
+                self.RLC_CB01()
+            case 0x02:
+                self.RLC_CB02()
+            case 0x03:
+                self.RLC_CB03()
+            case 0x04:
+                self.RLC_CB04()
+            case 0x05:
+                self.RLC_CB05()
+            case 0x06:
+                self.RLC_CB06()
+            case 0x07:
+                self.RLC_CB07()
+            case 0x08:
+                self.RLC_CB08()
+            case 0x09:
+                self.RRC_CB09()
+            case 0x0A:
+                self.RRC_CB0A()
+            case 0x0B:
+                self.RRC_CB0B()
+            case 0x0C:
+                self.RRC_CB0C()
+            case 0x0D:
+                self.RRC_CB0D()
+            case 0x0E:
+                self.RRC_CB0E()
+            case 0x0F:
+                self.RRC_CB0F()
+            case 0x10:
+                self.RL_CB10()
             case 0x11:
                 self.RL_CB11()
+            case 0x12:
+                self.RL_CB12()
+            case 0x13:
+                self.RL_CB13()
+            case 0x14:
+                self.RL_CB14()
+            case 0x15:
+                self.RL_CB15()
+            case 0x16:
+                self.RL_CB16()
+            case 0x17:
+                self.RL_CB17()
+            case 0x18:
+                self.RR_CB18()
+            case 0x19:
+                self.RR_CB19()
+            case 0x1A:
+                self.RR_CB1A()
+            case 0x1B:
+                self.RR_CB1B()
+            case 0x1C:
+                self.RR_CB1C()
+            case 0x1D:
+                self.RR_CB1D()
+            case 0x1E:
+                self.RR_CB1E()
+            case 0x1F:
+                self.RR_CB1F()
+            case 0x20:
+                self.SLA_CB20()
+            case 0x21:
+                self.SLA_CB21()
+            case 0x22:
+                self.SLA_CB22()
+            case 0x23:
+                self.SLA_CB23()
+            case 0x24:
+                self.SLA_CB24()
+            case 0x25:
+                self.SLA_CB25()
+            case 0x26:
+                self.SLA_CB26()
+            case 0x27:
+                self.SLA_CB27()
+            case 0x28:
+                self.SRA_CB28()
+            case 0x29:
+                self.SRA_CB29()
+            case 0x2A:
+                self.SRA_CB2A()
+            case 0x2B:
+                self.SRA_CB2B()
+            case 0x2C:
+                self.SRA_CB2C()
+            case 0x2D:
+                self.SRA_CB2D()
+            case 0x2E:
+                self.SRA_CB2E()
+            case 0x2F:
+                self.SRA_CB2F()
+            case 0x30:
+                self.SWAP_CB30()
+            case 0x31:
+                self.SWAP_CB31()
+            case 0x32:
+                self.SWAP_CB32()
+            case 0x33:
+                self.SWAP_CB33()
+            case 0x34:
+                self.SWAP_CB34()
+            case 0x35:
+                self.SWAP_CB35()
+            case 0x36:
+                self.SWAP_CB36()
+            case 0x37:
+                self.SWAP_CB37()
+            case 0x38:
+                self.SRL_CB38()
+            case 0x39:
+                self.SRL_CB39()
+            case 0x3A:
+                self.SRL_CB3A()
+            case 0x3B:
+                self.SRL_CB3B()
+            case 0x3C:
+                self.SRL_CB3C()
+            case 0x3D:
+                self.SRL_CB3D()
+            case 0x3E:
+                self.SRL_CB3E()
+            case 0x3F:
+                self.SRL_CB3F()
             case 0x40:
                 self.BIT_CB40()
             case 0x41:
@@ -585,6 +725,262 @@ class Opcodes:
                 self.BIT_CB7E()
             case 0x7F:
                 self.BIT_CB7F()
+            case 0x80:
+                self.RES_CB80()
+            case 0x81:
+                self.RES_CB81()
+            case 0x82:
+                self.RES_CB82()
+            case 0x83:
+                self.RES_CB83()
+            case 0x84:
+                self.RES_CB84()
+            case 0x85:
+                self.RES_CB85()
+            case 0x86:
+                self.RES_CB86()
+            case 0x87:
+                self.RES_CB87()
+            case 0x88:
+                self.RES_CB88()
+            case 0x89:
+                self.RES_CB89()
+            case 0x8A:
+                self.RES_CB8A()
+            case 0x8B:
+                self.RES_CB8B()
+            case 0x8C:
+                self.RES_CB8C()
+            case 0x8D:
+                self.RES_CB8D()
+            case 0x8E:
+                self.RES_CB8E()
+            case 0x8F:
+                self.RES_CB8F()
+            case 0x90:
+                self.RES_CB90()
+            case 0x91:
+                self.RES_CB91()
+            case 0x92:
+                self.RES_CB92()
+            case 0x93:
+                self.RES_CB93()
+            case 0x94:
+                self.RES_CB94()
+            case 0x95:
+                self.RES_CB95()
+            case 0x96:
+                self.RES_CB96()
+            case 0x97:
+                self.RES_CB97()
+            case 0x98:
+                self.RES_CB98()
+            case 0x99:
+                self.RES_CB99()
+            case 0x9A:
+                self.RES_CB9A()
+            case 0x9B:
+                self.RES_CB9B()
+            case 0x9C:
+                self.RES_CB9C()
+            case 0x9D:
+                self.RES_CB9D()
+            case 0x9E:
+                self.RES_CB9E()
+            case 0x9F:
+                self.RES_CB9F()
+            case 0xA0:
+                self.RES_CBA0()
+            case 0xA1:
+                self.RES_CBA1()
+            case 0xA2:
+                self.RES_CBA2()
+            case 0xA3:
+                self.RES_CBA3()
+            case 0xA4:
+                self.RES_CBA4()
+            case 0xA5:
+                self.RES_CBA5()
+            case 0xA6:
+                self.RES_CBA6()
+            case 0xA7:
+                self.RES_CBA7()
+            case 0xA8:
+                self.RES_CBA8()
+            case 0xA9:
+                self.RES_CBA9()
+            case 0xAA:
+                self.RES_CBAA()
+            case 0xAB:
+                self.RES_CBAB()
+            case 0xAC:
+                self.RES_CBAC()
+            case 0xAD:
+                self.RES_CBAD()
+            case 0xAE:
+                self.RES_CBAE()
+            case 0xAF:
+                self.RES_CBAF()
+            case 0xB0:
+                self.RES_CBB0()
+            case 0xB1:
+                self.RES_CBB1()
+            case 0xB2:
+                self.RES_CBB2()
+            case 0xB3:
+                self.RES_CBB3()
+            case 0xB4:
+                self.RES_CBB4()
+            case 0xB5:
+                self.RES_CBB5()
+            case 0xB6:
+                self.RES_CBB6()
+            case 0xB7:
+                self.RES_CBB7()
+            case 0xB8:
+                self.RES_CBB8()
+            case 0xB9:
+                self.RES_CBB9()
+            case 0xBA:
+                self.RES_CBBA()
+            case 0xBB:
+                self.RES_CBBB()
+            case 0xBC:
+                self.RES_CBBC()
+            case 0xBD:
+                self.RES_CBBD()
+            case 0xBE:
+                self.RES_CBBE()
+            case 0xBF:
+                self.RES_CBBF()
+            case 0xC0:
+                self.SET_CBC0()
+            case 0xC1:
+                self.SET_CBC1()
+            case 0xC2:
+                self.SET_CBC2()
+            case 0xC3:
+                self.SET_CBC3()
+            case 0xC4:
+                self.SET_CBC4()
+            case 0xC5:
+                self.SET_CBC5()
+            case 0xC6:
+                self.SET_CBC6()
+            case 0xC7:
+                self.SET_CBC7()
+            case 0xC8:
+                self.SET_CBC8()
+            case 0xC9:
+                self.SET_CBC9()
+            case 0xCA:
+                self.SET_CBCA()
+            case 0xCB:
+                self.SET_CBCB()
+            case 0xCC:
+                self.SET_CBCC()
+            case 0xCD:
+                self.SET_CBCD()
+            case 0xCE:
+                self.SET_CBCE()
+            case 0xCF:
+                self.SET_CBCF()
+            case 0xD0:
+                self.SET_CBD0()
+            case 0xD1:
+                self.SET_CBD1()
+            case 0xD2:
+                self.SET_CBD2()
+            case 0xD3:
+                self.SET_CBD3()
+            case 0xD4:
+                self.SET_CBD4()
+            case 0xD5:
+                self.SET_CBD5()
+            case 0xD6:
+                self.SET_CBD6()
+            case 0xD7:
+                self.SET_CBD7()
+            case 0xD8:
+                self.SET_CBD8()
+            case 0xD9:
+                self.SET_CBD9()
+            case 0xDA:
+                self.SET_CBDA()
+            case 0xDB:
+                self.SET_CBDB()
+            case 0xDC:
+                self.SET_CBDC()
+            case 0xDD:
+                self.SET_CBDD()
+            case 0xDE:
+                self.SET_CBDE()
+            case 0xDF:
+                self.SET_CBDF()
+            case 0xE0:
+                self.SET_CBE0()
+            case 0xE1:
+                self.SET_CBE1()
+            case 0xE2:
+                self.SET_CBE2()
+            case 0xE3:
+                self.SET_CBE3()
+            case 0xE4:
+                self.SET_CBE4()
+            case 0xE5:
+                self.SET_CBE5()
+            case 0xE6:
+                self.SET_CBE6()
+            case 0xE7:
+                self.SET_CBE7()
+            case 0xE8:
+                self.SET_CBE8()
+            case 0xE9:
+                self.SET_CBE9()
+            case 0xEA:
+                self.SET_CBEA()
+            case 0xEB:
+                self.SET_CBEB()
+            case 0xEC:
+                self.SET_CBEC()
+            case 0xED:
+                self.SET_CBED()
+            case 0xEE:
+                self.SET_CBEE()
+            case 0xEF:
+                self.SET_CBEF()
+            case 0xF0:
+                self.SET_CBF0()
+            case 0xF1:
+                self.SET_CBF1()
+            case 0xF2:
+                self.SET_CBF2()
+            case 0xF3:
+                self.SET_CBF3()
+            case 0xF4:
+                self.SET_CBF4()
+            case 0xF5:
+                self.SET_CBF5()
+            case 0xF6:
+                self.SET_CBF6()
+            case 0xF7:
+                self.SET_CBF7()
+            case 0xF8:
+                self.SET_CBF8()
+            case 0xF9:
+                self.SET_CBF9()
+            case 0xFA:
+                self.SET_CBFA()
+            case 0xFB:
+                self.SET_CBFB()
+            case 0xFC:
+                self.SET_CBFC()
+            case 0xFD:
+                self.SET_CBFD()
+            case 0xFE:
+                self.SET_CBFE()
+            case 0xFF:
+                self.SET_CBFF()
             case _:
                 raise Exception(f"Unknown Instruction: {helpers.int_to_hex(opcode)}")
 
@@ -651,7 +1047,7 @@ class Opcodes:
 
     def ADD_09(self):
         """ADD HL,BC"""
-        calc = self.R.HL + self.R.BC()
+        calc = self.R.HL + self.R.BC
         self.R.HL = calc % 65536
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 1 if calc > 2047 else 0
@@ -833,7 +1229,7 @@ class Opcodes:
 
     def CPL_2F(self):
         """CPL"""
-        self.R.A = self.R.A ^ 0b11111111
+        self.R.A = self.R.A ^ 0xFF
         self.R.SUBTRACTION = 1
         self.R.HALFCARRY = 1
 
@@ -2732,6 +3128,11 @@ class Opcodes:
         if self.R.CARRY == 1:
             self.JP_C3(self.R.POP())
 
+    def RETI_D9(self):
+        """RETI"""
+        self.EI_FB()
+        self.RET_C9()
+
     def JP_DA(self, value):
         """JP C,n16"""
         if self.R.CARRY == 1:
@@ -2803,6 +3204,10 @@ class Opcodes:
     def OR_F6(self, value):
         """OR A,n8"""
         self.OR_A_N8(value)
+
+    def LD_FA(self, value):
+        """LD A,[n16]"""
+        self.R.A = self.mmu.get_memory(value)
 
     def EI_FB(self):
         """EI"""

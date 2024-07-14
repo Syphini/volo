@@ -51,6 +51,7 @@ class PPU:
         pygame.display.set_caption("GB Test")
 
         self.clear_display()
+        pygame.display.flip()
 
     def get(self, addr):
         match addr:
@@ -141,11 +142,11 @@ class PPU:
             case 1:  # V-Blank
                 if self._CLOCK == 456:
                     self._LY += 1
+                    self._CLOCK = 0
 
                     if self._LY > 153:
                         self._MODE = 2
                         self._LY = 0
-                    self._CLOCK = 0
 
         self._CLOCK += 1
 
@@ -185,13 +186,28 @@ class PPU:
         offset = tileIndex * 16
         return self.mmu.VRAM[tileBlock + offset : tileBlock + offset + 16]
 
+    def draw_pixel(self, x, y, colourId):
+        """Draw pixel at (x,y)"""
+        self.canvas.fill(
+            self.PALETTE[colourId],
+            pygame.Rect(
+                x * self.PIXEL_SIZE,
+                y * self.PIXEL_SIZE,
+                self.PIXEL_SIZE,
+                self.PIXEL_SIZE,
+            ),
+        )
+
     def drawline(self):
         """Draw the current scanline"""
         y = self._LY
 
+        if y == 64:
+            print("64")
         for x in range(self.SCREEN_X):
-            print("drawing:", x, y)
             tileData = self.tile_to_colours(self.get_tile(x, y))
+            self.draw_pixel(x, y, tileData[y % 8][x % 8])
+        pygame.display.flip()
 
     def clear_display(self):
         """Clear the canvas"""
