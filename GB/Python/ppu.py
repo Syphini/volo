@@ -117,6 +117,7 @@ class PPU:
             if event.type == pygame.QUIT:
                 self.mmu.dump()
                 pygame.quit()
+                print("Closed App")
                 sys.exit()
 
         match self._MODE:

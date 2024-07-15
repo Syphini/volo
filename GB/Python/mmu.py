@@ -33,10 +33,18 @@ class MMU:
                 return self.OAM[address - 0xFE00]
             case 0xFF00:
                 return self.IO.P1
+            case 0xFF00:
+                print("TODO handle input", hex(address))
+            case addr if 0xFF01 <= addr <= 0xFF02:
+                print("TODO handle serial", hex(address))
+            case addr if 0xFF04 <= addr <= 0xFF07:
+                print("TODO handle timer registers", hex(address))
             case 0xFF0F:
                 return self.IO.IF
             case addr if 0xFF10 <= addr <= 0xFF26:
                 print("TODO handle audio registers", hex(address))
+            case addr if 0xFF30 <= addr <= 0xFF3F:
+                return self.IO.WAVE[address - 0xFF30]
             case addr if 0xFF40 <= addr <= 0xFF4B:
                 return self.IO.LCD.get(addr)
             case addr if 0xFF80 <= addr <= 0xFFFE:
@@ -62,10 +70,18 @@ class MMU:
                 self.OAM[address - 0xFE00] = value
             case 0xFF00:
                 self.IO.P1 = value
+            case 0xFF00:
+                print("TODO handle input", hex(address))
+            case addr if 0xFF01 <= addr <= 0xFF02:
+                print("TODO handle serial", hex(address))
+            case addr if 0xFF04 <= addr <= 0xFF07:
+                print("TODO handle timer registers", hex(address))
             case 0xFF0F:
                 self.IO.IF = value
             case addr if 0xFF10 <= addr <= 0xFF26:
                 print("TODO handle audio registers", hex(address))
+            case addr if 0xFF30 <= addr <= 0xFF3F:
+                self.IO.WAVE[address - 0xFF30] = value
             case addr if 0xFF40 <= addr <= 0xFF4B:
                 self.IO.LCD.set(addr, value)
             case addr if 0xFF80 <= addr <= 0xFFFE:

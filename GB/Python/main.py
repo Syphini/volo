@@ -8,7 +8,6 @@ from opcodes import Opcodes
 print()
 
 DEBUG = False
-SIMPLE_DEBUG = False
 
 ROM_FILE = "GB/ROM/DMG_ROM.bin"
 
@@ -17,8 +16,6 @@ ROM_FILE = "GB/ROM/DMG_ROM.bin"
 mmu = MMU()
 R = Registers(mmu)
 opcodes = Opcodes(mmu, R)
-
-IME = False
 
 # endregion
 
@@ -29,7 +26,7 @@ with open(ROM_FILE, "rb") as f:
 # region CPU Logic
 
 try:
-    while R.PC < len(mmu.RAM):
+    while True:
         # region DEBUG
         if DEBUG:
             allTime = time.time() * 1000
@@ -63,7 +60,6 @@ try:
                     helpers.int_to_hex(R.PC),
                     helpers.int_to_hex(PC_DATA),
                     opinfo["mnemonic"],
-                    [helpers.int_to_hex(c) for c in got_data],
                 )
             # endregion
 
@@ -75,13 +71,19 @@ try:
 
         opinfo = opcodes.opinfo["unprefixed"][helpers.int_to_hex(PC_DATA)]
         # TODO what the fuck is this
-        got_data = [
-            int.from_bytes(
-                bytes(mmu.RAM[R.PC + 1 : R.PC + 1 + int(operand["bytes"])]), "little"
-            )
-            for operand in opinfo["operands"]
-            if "bytes" in operand
+        opBytes = [
+            c
+            for c in [operand.get("bytes", None) for operand in opinfo["operands"]]
+            if c is not None
         ]
+        opData = (
+            int.from_bytes(
+                bytes([mmu.get_memory(R.PC + i) for i in range(1, opBytes[0] + 1)]),
+                "little",
+            )
+            if len(opBytes) > 0
+            else None
+        )
 
         # region DEBUG
         if SIMPLE_DEBUG:
@@ -89,13 +91,15 @@ try:
                 helpers.int_to_hex(R.PC),
                 helpers.int_to_hex(PC_DATA),
                 opinfo["mnemonic"],
-                [c["name"] for c in opinfo["operands"]],
-                [helpers.int_to_hex(c) for c in got_data],
+                [
+                    helpers.int_to_hex(opData) if c.get("bytes") else c["name"]
+                    for c in opinfo["operands"]
+                ],
             )
         # endregion
 
         R.INCREMENT_PC(opinfo["bytes"])
-        opcodes.execute(PC_DATA, got_data[0] if len(got_data) > 0 else None)
+        opcodes.execute(PC_DATA, opData)
         # endregion
 
         mmu.IO.LCD.tick()

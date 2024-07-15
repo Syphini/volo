@@ -1,3 +1,4 @@
+import helpers
 from ppu import PPU
 
 
@@ -67,18 +68,18 @@ class Registers:
         self.L = value & 0xFF
 
     def PUSH(self, value: int):
-        self.SP = (self.SP - 1) % 256
+        self.SP = helpers.wrap_16(self.SP - 1)
         self.mmu.set_memory(self.SP, value >> 8)
 
-        self.SP = (self.SP - 1) % 256
+        self.SP = helpers.wrap_16(self.SP - 1)
         self.mmu.set_memory(self.SP, value & 0xFF)
 
     def POP(self):
         lower = self.mmu.get_memory(self.SP)
-        self.SP = (self.SP + 1) % 256
+        self.SP = helpers.wrap_16(self.SP + 1)
 
         higher = self.mmu.get_memory(self.SP)
-        self.SP = (self.SP + 1) % 256
+        self.SP = helpers.wrap_16(self.SP + 1)
 
         return higher << 8 | lower
 
@@ -107,8 +108,6 @@ class Registers:
                 "C": self.CARRY,
             }
         )
-
-        # self.mmu.dump()
 
 
 class IO:
@@ -143,6 +142,7 @@ class IO:
         self.NR50 = 0x77  # FF24
         self.NR51 = 0xF3  # FF25
         self.NR52 = 0xF1  # FF26
+        self.WAVE = bytearray(0x10)  # FF30 -> FF3F
         self.LCD = lcd  # FF40 -> FF4B
         # ???
 

@@ -11,3 +11,11 @@ def hexstring_to_bytearray(hex_data: str):
     for c in bytes.fromhex(hex_data):
         data.append(c)
     return data
+
+
+def wrap_16(value):
+    return value % 0x10000
+
+
+def wrap_8(value):
+    return value % 256
