@@ -1,4 +1,3 @@
-import time
 import traceback
 import helpers
 from mmu import MMU
@@ -8,6 +7,7 @@ from opcodes import Opcodes
 print()
 
 DEBUG = False
+SIMPLE_DEBUG = False
 
 ROM_FILE = "GB/ROM/DMG_ROM.bin"
 
@@ -27,16 +27,6 @@ with open(ROM_FILE, "rb") as f:
 
 try:
     while True:
-        # region DEBUG
-        if DEBUG:
-            allTime = time.time() * 1000
-        # endregion
-
-        # region DEBUG
-        if DEBUG:
-            opTime = time.time() * 1000
-        # endregion
-
         if R.PC >= 0x104 and R.PC < 0x150:
             # TODO CARTRIDGE HEADER
             R.INCREMENT_PC(1)
@@ -70,7 +60,6 @@ try:
             continue
 
         opinfo = opcodes.opinfo["unprefixed"][helpers.int_to_hex(PC_DATA)]
-        # TODO what the fuck is this
         opBytes = [
             c
             for c in [operand.get("bytes", None) for operand in opinfo["operands"]]

@@ -1,3 +1,4 @@
+import time
 import sys
 import pygame
 
@@ -23,6 +24,8 @@ class PPU:
         self._LX = 0x0
         self._TILEMAP = 0x9800
         self._CLOCK = 0
+
+        self._DEBUG_TIME = time.time() * 1000
 
         self.PALETTE = [
             (255, 246, 211),
@@ -148,6 +151,9 @@ class PPU:
                     if self._LY > 153:
                         self._MODE = 2
                         self._LY = 0
+                        newTime = time.time() * 1000
+                        print("Frame Drawn", newTime - self._DEBUG_TIME)
+                        self._DEBUG_TIME = newTime
 
         self._CLOCK += 1
 
@@ -203,8 +209,6 @@ class PPU:
         """Draw the current scanline"""
         y = self._LY
 
-        if y == 64:
-            print("64")
         for x in range(self.SCREEN_X):
             tileData = self.tile_to_colours(self.get_tile(x, y))
             self.draw_pixel(x, y, tileData[y % 8][x % 8])
