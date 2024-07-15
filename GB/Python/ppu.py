@@ -1,6 +1,7 @@
 import time
 import sys
 import pygame
+import helpers
 
 
 class PPU:
@@ -55,6 +56,24 @@ class PPU:
 
         self.clear_display()
         pygame.display.flip()
+
+    def dump(self):
+        return bytearray(
+            [
+                self.LCDC,
+                self.STAT,
+                self.SCY,
+                self.SCX,
+                self._LY,
+                self.LYC,
+                self.DMA,
+                self.BGP,
+                self.OBP0,
+                self.OBP1,
+                self.WY,
+                self.WX,
+            ]
+        )
 
     def get(self, addr):
         match addr:
@@ -184,12 +203,7 @@ class PPU:
         """Get tile given current pixel X & Y"""
         tileBlock = 0x0
 
-        offsetX = x  # TODO scx
-        offsetY = y  # TODO scy
-
-        tileIndex = self.mmu.get_memory(
-            self._TILEMAP + ((offsetY // 8) * 32) + (offsetX // 8)
-        )
+        tileIndex = self.mmu.get_memory(self._TILEMAP + ((y // 8) * 32) + (x // 8))
         offset = tileIndex * 16
         return self.mmu.VRAM[tileBlock + offset : tileBlock + offset + 16]
 
@@ -211,7 +225,11 @@ class PPU:
 
         for x in range(self.SCREEN_X):
             tileData = self.tile_to_colours(self.get_tile(x, y))
-            self.draw_pixel(x, y, tileData[y % 8][x % 8])
+            self.draw_pixel(
+                helpers.wrap_8(x + self.SCX),
+                helpers.wrap_8(y + self.SCY),
+                tileData[y % 8][x % 8],
+            )
         pygame.display.flip()
 
     def clear_display(self):

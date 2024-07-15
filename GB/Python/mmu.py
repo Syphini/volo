@@ -102,8 +102,9 @@ class MMU:
                 + self.OAM
                 + self.ECHO
                 + self.EMPTY
-                + bytearray(0x80)
-                + self.HRAM,
+                + self.IO.dump()
+                + self.HRAM
+                + bytearray([self.IO._IE.get()]),
                 " ",
             ).upper()
             n = 48

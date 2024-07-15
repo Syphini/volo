@@ -127,7 +127,7 @@ class IO:
         self.NR13 = 0xFF  # FF13
         self.NR14 = 0xBF  # FF14
         self.NR21 = 0x3F  # FF16
-        self.RN22 = 0x00  # FF17
+        self.NR22 = 0x00  # FF17
         self.NR23 = 0xFF  # FF18
         self.NR24 = 0xBF  # FF19
         self.NR30 = 0x7F  # FF1A
@@ -164,6 +164,72 @@ class IO:
     @IF.setter
     def IF(self, value):
         self._IF.set(value)
+
+    def dump(self):
+        data = bytearray(
+            [
+                self.P1,
+                self.SB,
+                self.SC,
+                0x00,
+                self.DIV,
+                self.TIMA,
+                self.TMA,
+                self.TAC,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                self._IF.get(),
+            ]
+        )
+        data.extend(
+            bytearray(
+                [
+                    self.NR10,
+                    self.NR11,
+                    self.NR12,
+                    self.NR13,
+                    self.NR14,
+                    0x00,
+                    self.NR21,
+                    self.NR22,
+                    self.NR23,
+                    self.NR24,
+                    self.NR30,
+                    self.NR31,
+                    self.NR32,
+                    self.NR33,
+                    self.NR34,
+                    0x00,
+                    self.NR41,
+                    self.NR42,
+                    self.NR43,
+                    self.NR44,
+                    self.NR50,
+                    self.NR51,
+                    self.NR52,
+                    0x00,
+                    0x00,
+                    0x00,
+                    0x00,
+                    0x00,
+                    0x00,
+                    0x00,
+                    0x00,
+                    0x00,
+                ]
+            )
+        )
+
+        data.extend(self.WAVE)
+        data.extend(self.LCD.dump())
+        data.extend(bytearray(0x34))
+
+        return data
 
 
 class Interrupts:

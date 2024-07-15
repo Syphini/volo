@@ -1595,7 +1595,7 @@ class Opcodes:
 
     def HALT_76(self):
         """HALT"""
-        raise Exception("HALT")
+        pass
 
     def LD_77(self):
         """LD [HL],A"""
