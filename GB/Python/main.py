@@ -94,6 +94,9 @@ try:
         mmu.IO.LCD.tick()
 
 except Exception as e:
+    print("------")
+    R.debug()
+    print("------")
     traceback.print_exception(e)
     mmu.dump()
     print("Exiting...")

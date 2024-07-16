@@ -112,15 +112,14 @@ class Registers:
 
 class IO:
     def __init__(self, mmu):
-        lcd = PPU(mmu)
-
-        self.P1 = 0xCF  # FF00
+        self.JOYP = Joypad()  # FF00
         self.SB = 0x00  # FF01
         self.SC = 0x73  # FF02
         self.DIV = 0xAB  # FF04
         self.TIMA = 0x00  # FF05
         self.TMA = 0x00  # FF06
         self.TAC = 0xF8  # FF07
+        self.IF = Interrupts(0xE1)  # FF0F
         self.NR10 = 0x80  # FF10
         self.NR11 = 0xBF  # FF11
         self.NR12 = 0xF3  # FF12
@@ -143,32 +142,53 @@ class IO:
         self.NR51 = 0xF3  # FF25
         self.NR52 = 0xF1  # FF26
         self.WAVE = bytearray(0x10)  # FF30 -> FF3F
-        self.LCD = lcd  # FF40 -> FF4B
+        self.LCD = PPU(mmu)  # FF40 -> FF4B
         # ???
+        self.IE = Interrupts()  # FFFF
 
-        self._IF = Interrupts(0xE1)  # FF0F
-        self._IE = Interrupts()  # FFFF
+    def get(self, address):
+        match address:
+            case 0xFF00:
+                return self.JOYP.get()
+            case addr if 0xFF01 <= addr <= 0xFF02:
+                print("TODO handle serial", hex(address))
+            case addr if 0xFF04 <= addr <= 0xFF07:
+                print("TODO handle timer registers", hex(address))
+            case 0xFF0F:
+                return self.IF.get()
+            case addr if 0xFF10 <= addr <= 0xFF26:
+                print("TODO handle audio registers", hex(address))
+            case addr if 0xFF30 <= addr <= 0xFF3F:
+                return self.WAVE[address - 0xFF30]
+            case addr if 0xFF40 <= addr <= 0xFF4B:
+                return self.LCD.get(addr)
+            case _:
+                print(f"Ignoring IO Address GET: {hex(address)}")
+                return 0x00
 
-    @property
-    def IE(self):
-        return self._IE.get()
-
-    @IE.setter
-    def IE(self, value):
-        self._IE.set(value)
-
-    @property
-    def IF(self):
-        return self._IF.get()
-
-    @IF.setter
-    def IF(self, value):
-        self._IF.set(value)
+    def set(self, address, value):
+        match address:
+            case 0xFF00:
+                self.JOYP.set(value)
+            case addr if 0xFF01 <= addr <= 0xFF02:
+                print("TODO handle serial", hex(address))
+            case addr if 0xFF04 <= addr <= 0xFF07:
+                print("TODO handle timer registers", hex(address))
+            case 0xFF0F:
+                self.IF.set(value)
+            case addr if 0xFF10 <= addr <= 0xFF26:
+                print("TODO handle audio registers", hex(address))
+            case addr if 0xFF30 <= addr <= 0xFF3F:
+                self.WAVE[address - 0xFF30] = value
+            case addr if 0xFF40 <= addr <= 0xFF4B:
+                self.LCD.set(addr, value)
+            case _:
+                print(f"Ignoring IO Address SET: {hex(address)} {hex(value)}")
 
     def dump(self):
         data = bytearray(
             [
-                self.P1,
+                self.JOYP.get(),
                 self.SB,
                 self.SC,
                 0x00,
@@ -183,7 +203,7 @@ class IO:
                 0x00,
                 0x00,
                 0x00,
-                self._IF.get(),
+                self.IF.get(),
             ]
         )
         data.extend(
@@ -251,3 +271,37 @@ class Interrupts:
             | self.LCD << 1
             | self.VBLANK
         )
+
+
+class Joypad:
+    # 0xCF -> 11001111
+    # 0 is True, 1 is False
+    def __init__(self):
+        self.USE_SELECT = True
+        self.USE_DPAD = True
+
+        # SsBA
+        self.START = False
+        self.SELECT = False
+        self.B = False
+        self.A = False
+
+        # DPAD
+        self.DOWN = False
+        self.UP = False
+        self.LEFT = False
+        self.RIGHT = False
+
+    def get(self):
+        return (
+            self.USE_SELECT << 5
+            | self.USE_DPAD << 4
+            | ((not self.START) or (not self.DOWN)) << 3
+            | ((not self.SELECT) or (not self.UP)) << 2
+            | ((not self.B) or (not self.LEFT)) << 1
+            | ((not self.A) or (not self.RIGHT))
+        )
+
+    def set(self, value):
+        self.USE_SELECT = not (value >> 5 & 1)
+        self.USE_DPAD = not (value >> 4 & 1)
