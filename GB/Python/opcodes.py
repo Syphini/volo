@@ -1186,11 +1186,8 @@ class Opcodes:
 
     def JR_18(self, value):
         """JR e8"""
-        if (value & (1 << 7)) != 0:
-            addr = -(128 - (value - (1 << 7)))
-            self.R.INCREMENT_PC(addr)
-            return
-        self.R.INCREMENT_PC(value)
+        addr = helpers.signed_value(value)
+        self.R.INCREMENT_PC(addr)
 
     def ADD_19(self):
         """ADD HL,DE"""
@@ -3259,9 +3256,7 @@ class Opcodes:
     def ADD_E8(self, value):
         """ADD SP,e8"""
         initial = self.R.SP
-        if (value & (1 << 7)) != 0:
-            value = -(128 - (value - (1 << 7)))
-        calc = initial + value
+        calc = initial + helpers.signed_value(value)
         final = helpers.wrap_16(calc)
         self.R.A = final
         self.R.ZERO = 0
@@ -3318,9 +3313,7 @@ class Opcodes:
 
     def LD_F8(self, value):
         """LD HL,SP+e8"""
-        addr = value
-        if (value & (1 << 7)) != 0:
-            addr = -(128 - (value - (1 << 7)))
+        addr = helpers.signed_value(value)
         self.R.HL = self.R.SP + addr
 
     def LD_F9(self):

@@ -19,3 +19,9 @@ def wrap_16(value):
 
 def wrap_8(value):
     return value % 256
+
+
+def signed_value(value):
+    if (value & (1 << 7)) != 0:
+        return -(128 - (value - (1 << 7)))
+    return value

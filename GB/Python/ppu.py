@@ -8,7 +8,7 @@ class PPU:
     def __init__(self, mmu):
         self.mmu = mmu
 
-        self.LCDC = 0x91  # FF40
+        self.LCDC = Control_Bits(0x91)  # FF40
         self.STAT = 0x85  # FF41
         self.SCY = 0x00  # FF42
         self.SCX = 0x00  # FF43
@@ -23,7 +23,6 @@ class PPU:
 
         self._MODE = 2
         self._LX = 0x0
-        self._TILEMAP = 0x9800
         self._CLOCK = 0
 
         self._DEBUG_TIME = time.time() * 1000
@@ -60,7 +59,7 @@ class PPU:
     def dump(self):
         return bytearray(
             [
-                self.LCDC,
+                self.LCDC.get(),
                 self.STAT,
                 self.SCY,
                 self.SCX,
@@ -78,7 +77,7 @@ class PPU:
     def get(self, addr):
         match addr:
             case 0xFF40:
-                return self.LCDC
+                return self.LCDC.get()
             case 0xFF41:
                 return self.STAT
             case 0xFF42:
@@ -102,18 +101,20 @@ class PPU:
             case 0xFF4B:
                 return self.WX
             case _:
-                raise Exception("Unknown IO Register:", addr)
+                raise Exception("Unknown IO Register:", hex(addr))
 
     def set(self, addr, value):
         match addr:
             case 0xFF40:
-                self.LCDC = value
+                self.LCDC.set(value)
             case 0xFF41:
                 self.STAT = value
             case 0xFF42:
                 self.SCY = value
             case 0xFF43:
                 self.SCX = value
+            case 0xFF44:
+                pass  # readonly
             case 0xFF45:
                 self.LYC = value
             case 0xFF46:
@@ -129,7 +130,7 @@ class PPU:
             case 0xFF4B:
                 self.WX = value
             case _:
-                raise Exception("Unknown IO Register:", addr)
+                raise Exception("Unknown IO Register:", hex(addr))
 
     # Tilemap 1 9800 -> 9BFF
     # Tilemap 2 9C00 -> 9FFF
@@ -201,11 +202,17 @@ class PPU:
 
     def get_tile(self, x, y):
         """Get tile given current pixel X & Y"""
-        tileBlock = 0x0
+        use_alt_block = self.LCDC.BIT_4 == 1
+        use_alt_tilemap = self.LCDC.BIT_3 == 1
+        vramTileBlock = 0x0000 if use_alt_block else 0x1000
+        tileMap = 0x9C00 if use_alt_tilemap else 0x9800
 
-        tileIndex = self.mmu.get_memory(self._TILEMAP + ((y // 8) * 32) + (x // 8))
-        offset = tileIndex * 16
-        return self.mmu.VRAM[tileBlock + offset : tileBlock + offset + 16]
+        tileIndex = self.mmu.get_memory(tileMap + ((y // 8) * 32) + (x // 8))
+        offset = (
+            tileIndex if use_alt_block == 1 else helpers.signed_value(tileIndex)
+        ) * 16
+        # TODO change this to get_memory
+        return self.mmu.VRAM[vramTileBlock + offset : vramTileBlock + offset + 16]
 
     def draw_pixel(self, x, y, colourId):
         """Draw pixel at (x,y)"""
@@ -236,4 +243,31 @@ class PPU:
         """Clear the canvas"""
         self.canvas.fill(
             self.PALETTE[0], pygame.Rect(0, 0, self.CANVAS_SIZE[0], self.CANVAS_SIZE[1])
+        )
+
+
+class Control_Bits:
+    def __init__(self, value):
+        self.set(value)
+
+    def set(self, value):
+        self.BIT_7 = value >> 7 & 1
+        self.BIT_6 = value >> 6 & 1
+        self.BIT_5 = value >> 5 & 1
+        self.BIT_4 = value >> 4 & 1
+        self.BIT_3 = value >> 3 & 1
+        self.BIT_2 = value >> 2 & 1
+        self.BIT_1 = value >> 1 & 1
+        self.BIT_0 = value & 1
+
+    def get(self):
+        return (
+            self.BIT_7 << 7
+            | self.BIT_6 << 6
+            | self.BIT_5 << 5
+            | self.BIT_4 << 4
+            | self.BIT_3 << 3
+            | self.BIT_2 << 2
+            | self.BIT_1 << 1
+            | self.BIT_0
         )

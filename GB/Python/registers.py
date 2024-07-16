@@ -93,7 +93,10 @@ class Registers:
             "C": self.C,
             "D": self.D,
             "E": self.E,
-            "F": 0,
+            "F": self.ZERO << 7
+            | self.SUBTRACTION << 6
+            | self.HALFCARRY << 5
+            | self.CARRY << 4,
             "H": self.H,
             "L": self.L,
             "PC": self.PC,
@@ -164,7 +167,7 @@ class IO:
                 return self.LCD.get(addr)
             case _:
                 print(f"Ignoring IO Address GET: {hex(address)}")
-                return 0x00
+                return 0xFF
 
     def set(self, address, value):
         match address:
