@@ -535,7 +535,7 @@ class Opcodes:
                     return self.SET_CBFF()
                 case _:
                     raise Exception(
-                        f"Unknown Instruction: {helpers.int_to_hex(opcode)}"
+                        f"Unknown Instruction: {helpers.formatted_hex(opcode)}"
                     )
         else:
             match opcode:
@@ -945,7 +945,7 @@ class Opcodes:
                     return self.JP_CA(self.read_bytes(2))
                 case 0xCB:
                     raise Exception(
-                        f"Invalid Execution Order: {helpers.int_to_hex(opcode)}"
+                        f"Invalid Execution Order: {helpers.formatted_hex(opcode)}"
                     )
                 case 0xCC:
                     return self.CALL_CC(self.read_bytes(2))
@@ -962,7 +962,7 @@ class Opcodes:
                 case 0xD2:
                     return self.JP_D2(self.read_bytes(2))
                 case 0xD3:
-                    raise Exception(f"Illegal Opcode: {helpers.int_to_hex(opcode)}")
+                    raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
                 case 0xD4:
                     return self.CALL_D4(self.read_bytes(2))
                 case 0xD5:
@@ -978,11 +978,11 @@ class Opcodes:
                 case 0xDA:
                     return self.JP_DA(self.read_bytes(2))
                 case 0xDB:
-                    raise Exception(f"Illegal Opcode: {helpers.int_to_hex(opcode)}")
+                    raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
                 case 0xDC:
-                    self.CALL_DC(self.read_bytes(2))
+                    return self.CALL_DC(self.read_bytes(2))
                 case 0xDD:
-                    raise Exception(f"Illegal Opcode: {helpers.int_to_hex(opcode)}")
+                    raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
                 case 0xDE:
                     return self.SBC_DE(self.read_bytes(1))
                 case 0xDF:
@@ -994,9 +994,9 @@ class Opcodes:
                 case 0xE2:
                     return self.LDH_E2()
                 case 0xE3:
-                    raise Exception(f"Illegal Opcode: {helpers.int_to_hex(opcode)}")
+                    raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
                 case 0xE4:
-                    raise Exception(f"Illegal Opcode: {helpers.int_to_hex(opcode)}")
+                    raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
                 case 0xE5:
                     return self.PUSH_E5()
                 case 0xE6:
@@ -1010,11 +1010,11 @@ class Opcodes:
                 case 0xEA:
                     return self.LD_EA(self.read_bytes(2))
                 case 0xEB:
-                    raise Exception(f"Illegal Opcode: {helpers.int_to_hex(opcode)}")
+                    raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
                 case 0xEC:
-                    raise Exception(f"Illegal Opcode: {helpers.int_to_hex(opcode)}")
+                    raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
                 case 0xED:
-                    raise Exception(f"Illegal Opcode: {helpers.int_to_hex(opcode)}")
+                    raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
                 case 0xEE:
                     return self.XOR_EE(self.read_bytes(1))
                 case 0xEF:
@@ -1028,7 +1028,7 @@ class Opcodes:
                 case 0xF3:
                     return self.DI_F3()
                 case 0xF4:
-                    raise Exception(f"Illegal Opcode: {helpers.int_to_hex(opcode)}")
+                    raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
                 case 0xF5:
                     return self.PUSH_F5()
                 case 0xF6:
@@ -1044,16 +1044,16 @@ class Opcodes:
                 case 0xFB:
                     return self.EI_FB()
                 case 0xFC:
-                    raise Exception(f"Illegal Opcode: {helpers.int_to_hex(opcode)}")
+                    raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
                 case 0xFD:
-                    raise Exception(f"Illegal Opcode: {helpers.int_to_hex(opcode)}")
+                    raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
                 case 0xFE:
                     return self.CP_FE(self.read_bytes(1))
                 case 0xFF:
                     return self.RST_FF()
                 case _:
                     raise Exception(
-                        f"Unknown Instruction: {helpers.int_to_hex(opcode)}"
+                        f"Unknown Instruction: {helpers.formatted_hex(opcode)}"
                     )
 
     def NOP_00(self):
@@ -1061,12 +1061,12 @@ class Opcodes:
         return 4
 
     def LD_01(self, value: int):
-        """LD BC,n16"""
+        """LD BC, n16"""
         self.R.BC = value
         return 12
 
     def LD_02(self):
-        """LD [BC],A"""
+        """LD [BC], A"""
         self.mmu.set_memory(self.R.BC, self.R.A)
         return 8
 
@@ -1079,11 +1079,10 @@ class Opcodes:
         initial = register
         calc = initial + 1
         final = helpers.wrap_8bit(calc)
-        self.R.ZERO = 1 if final == 0 else 0
+        self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = (
-            1 if helpers.getLowerNibble(initial) > helpers.getLowerNibble(calc) else 0
-        )
+        self.R.HALFCARRY = ((initial & 0xF) + 1 > 0xF) & 1
+
         return final
 
     def INC_04(self):
@@ -1095,11 +1094,9 @@ class Opcodes:
         initial = register
         calc = initial - 1
         final = helpers.wrap_8bit(calc)
-        self.R.ZERO = 1 if final == 0 else 0
+        self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 1
-        self.R.HALFCARRY = (
-            1 if helpers.getLowerNibble(calc) > helpers.getLowerNibble(initial) else 0
-        )
+        self.R.HALFCARRY = ((initial & 0xF) - 1 < 0) & 1
         return final
 
     def DEC_05(self):
@@ -1108,7 +1105,7 @@ class Opcodes:
         return 4
 
     def LD_06(self, value):
-        """LD B,n8"""
+        """LD B, n8"""
         self.R.B = value
         return 8
 
@@ -1132,16 +1129,18 @@ class Opcodes:
         return 20
 
     def ADD_09(self):
-        """ADD HL,BC"""
+        """ADD HL, BC"""
         calc = self.R.HL + self.R.BC
-        self.R.HL = helpers.wrap_16bit(calc)
+
         self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = 1 if calc > 2047 else 0
-        self.R.CARRY = 1 if calc > 65535 else 0
+        self.R.HALFCARRY = ((self.R.HL & 0xFFF) + (self.R.BC & 0xFFF) > 0xFFF) & 1
+        self.R.CARRY = (calc > 0xFFFF) & 1
+
+        self.R.HL = helpers.wrap_16bit(calc)
         return 8
 
     def LD_0A(self):
-        """LD A,[BC]"""
+        """LD A, [BC]"""
         self.R.A = self.mmu.get_memory(self.R.BC)
         return 8
 
@@ -1161,7 +1160,7 @@ class Opcodes:
         return 4
 
     def LD_0E(self, value):
-        """LD C,n8"""
+        """LD C, n8"""
         self.R.C = value
         return 8
 
@@ -1179,12 +1178,12 @@ class Opcodes:
         return 4
 
     def LD_11(self, value: int):
-        """LD DE,n16"""
+        """LD DE, n16"""
         self.R.DE = value
         return 12
 
     def LD_12(self):
-        """LD [DE],A"""
+        """LD [DE], A"""
         self.mmu.set_memory(self.R.DE, self.R.A)
         return 8
 
@@ -1204,7 +1203,7 @@ class Opcodes:
         return 4
 
     def LD_16(self, value):
-        """LD D,n8"""
+        """LD D, n8"""
         self.R.D = value
         return 8
 
@@ -1228,16 +1227,18 @@ class Opcodes:
         return 12
 
     def ADD_19(self):
-        """ADD HL,DE"""
+        """ADD HL, DE"""
         calc = self.R.HL + self.R.DE
-        self.R.HL = helpers.wrap_16bit(calc)
+
         self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = 1 if calc > 2047 else 0
-        self.R.CARRY = 1 if calc > 65535 else 0
+        self.R.HALFCARRY = ((self.R.HL & 0xFFF) + (self.R.DE & 0xFFF) > 0xFFF) & 1
+        self.R.CARRY = (calc > 0xFFFF) & 1
+
+        self.R.HL = helpers.wrap_16bit(calc)
         return 8
 
     def LD_1A(self):
-        """LD A,[DE]"""
+        """LD A, [DE]"""
         self.R.A = self.mmu.get_memory(self.R.DE)
         return 8
 
@@ -1257,7 +1258,7 @@ class Opcodes:
         return 4
 
     def LD_1E(self, value):
-        """LD E,n8"""
+        """LD E, n8"""
         self.R.E = value
         return 8
 
@@ -1281,7 +1282,7 @@ class Opcodes:
         return 20
 
     def LD_21(self, value: int):
-        """LD HL,n16"""
+        """LD HL, n16"""
         self.R.HL = value
         return 12
 
@@ -1307,7 +1308,7 @@ class Opcodes:
         return 4
 
     def LD_26(self, value):
-        """LD H,n8"""
+        """LD H, n8"""
         self.R.H = value
         return 8
 
@@ -1329,7 +1330,7 @@ class Opcodes:
             else helpers.wrap_8bit(self.R.A - offset)
         )
         self.R.A = final
-        self.R.ZERO = 1 if final == 0 else 0
+        self.R.ZERO = (final == 0) & 1
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
         return 4
@@ -1341,16 +1342,18 @@ class Opcodes:
         return 20
 
     def ADD_29(self):
-        """ADD HL,HL"""
+        """ADD HL, HL"""
         calc = self.R.HL + self.R.HL
-        self.R.HL = helpers.wrap_16bit(calc)
+
         self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = 1 if calc > 2047 else 0
-        self.R.CARRY = 1 if calc > 65535 else 0
+        self.R.HALFCARRY = ((self.R.HL & 0xFFF) + (self.R.HL & 0xFFF) > 0xFFF) & 1
+        self.R.CARRY = (calc > 0xFFFF) & 1
+
+        self.R.HL = helpers.wrap_16bit(calc)
         return 8
 
     def LD_2A(self):
-        """LD A,[HLI]"""
+        """LD A, [HLI]"""
         self.R.A = self.mmu.get_memory(self.R.HL)
         self.R.HL = helpers.wrap_16bit(self.R.HL + 1)
         return 8
@@ -1371,7 +1374,7 @@ class Opcodes:
         return 4
 
     def LD_2E(self, value):
-        """LD L,n8"""
+        """LD L, n8"""
         self.R.L = value
         return 8
 
@@ -1389,7 +1392,7 @@ class Opcodes:
         return 20
 
     def LD_31(self, value: int):
-        """LD SP,n16"""
+        """LD SP, n16"""
         self.R.SP = value
         return 12
 
@@ -1406,16 +1409,20 @@ class Opcodes:
 
     def INC_34(self):
         """INC [HL]"""
-        self.mmu.set_memory(self.R.HL, self.mmu.get_memory(self.R.HL) + 1)
+        self.mmu.set_memory(
+            self.R.HL, helpers.wrap_8bit(self.mmu.get_memory(self.R.HL) + 1)
+        )
         return 12
 
     def DEC_35(self):
         """DEC [HL]"""
-        self.mmu.set_memory(self.R.HL, self.mmu.get_memory(self.R.HL) - 1)
+        self.mmu.set_memory(
+            self.R.HL, helpers.wrap_8bit(self.mmu.get_memory(self.R.HL) - 1)
+        )
         return 12
 
     def LD_36(self, value):
-        """LD [HL],n8"""
+        """LD [HL], n8"""
         self.mmu.set_memory(self.R.HL, value)
         return 12
 
@@ -1427,22 +1434,24 @@ class Opcodes:
         return 4
 
     def JR_38(self, value):
-        """JR C,e8"""
+        """JR C, e8"""
         if self.R.CARRY == 1:
             self.JR_18(value)
         return 20
 
     def ADD_39(self):
-        """ADD HL,SP"""
+        """ADD HL, SP"""
         calc = self.R.HL + self.R.SP
-        self.R.HL = helpers.wrap_16bit(calc)
+
         self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = 1 if calc > 2047 else 0
-        self.R.CARRY = 1 if calc > 65535 else 0
+        self.R.HALFCARRY = ((self.R.HL & 0xFFF) + (self.R.SP & 0xFFF) > 0xFFF) & 1
+        self.R.CARRY = (calc > 0xFFFF) & 1
+
+        self.R.HL = helpers.wrap_16bit(calc)
         return 8
 
     def LD_3A(self):
-        """LD A,[HLD]"""
+        """LD A, [HLD]"""
         self.R.A = self.mmu.get_memory(self.R.HL)
         self.R.HL = helpers.wrap_16bit(self.R.HL - 1)
         return 8
@@ -1463,7 +1472,7 @@ class Opcodes:
         return 4
 
     def LD_3E(self, value):
-        """LD A,n8"""
+        """LD A, n8"""
         self.R.A = value
         return 8
 
@@ -1471,276 +1480,276 @@ class Opcodes:
         """CCF"""
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
-        self.R.CARRY = 1 if self.R.CARRY == 0 else 0
+        self.R.CARRY = (self.R.CARRY == 0) & 1
         return 4
 
     def LD_40(self):
-        """LD B,B"""
+        """LD B, B"""
         self.R.B = self.R.B
         return 4
 
     def LD_41(self):
-        """LD B,C"""
+        """LD B, C"""
         self.R.B = self.R.C
         return 4
 
     def LD_42(self):
-        """LD B,D"""
+        """LD B, D"""
         self.R.B = self.R.D
         return 4
 
     def LD_43(self):
-        """LD B,E"""
+        """LD B, E"""
         self.R.B = self.R.E
         return 4
 
     def LD_44(self):
-        """LD B,H"""
+        """LD B, H"""
         self.R.B = self.R.H
         return 4
 
     def LD_45(self):
-        """LD B,L"""
+        """LD B, L"""
         self.R.B = self.R.L
         return 4
 
     def LD_46(self):
-        """LD B,[HL]"""
+        """LD B, [HL]"""
         self.R.B = self.mmu.get_memory(self.R.HL)
         return 8
 
     def LD_47(self):
-        """LD B,A"""
+        """LD B, A"""
         self.R.B = self.R.A
         return 4
 
     def LD_48(self):
-        """LD C,B"""
+        """LD C, B"""
         self.R.C = self.R.B
         return 4
 
     def LD_49(self):
-        """LD C,C"""
+        """LD C, C"""
         self.R.C = self.R.C
         return 4
 
     def LD_4A(self):
-        """LD C,D"""
+        """LD C, D"""
         self.R.C = self.R.D
         return 4
 
     def LD_4B(self):
-        """LD C,E"""
+        """LD C, E"""
         self.R.C = self.R.E
         return 4
 
     def LD_4C(self):
-        """LD C,H"""
+        """LD C, H"""
         self.R.C = self.R.H
         return 4
 
     def LD_4D(self):
-        """LD C,L"""
+        """LD C, L"""
         self.R.C = self.R.L
         return 4
 
     def LD_4E(self):
-        """LD C,[HL]"""
+        """LD C, [HL]"""
         self.R.C = self.mmu.get_memory(self.R.HL)
         return 8
 
     def LD_4F(self):
-        """LD C,A"""
+        """LD C, A"""
         self.R.C = self.R.A
         return 4
 
     def LD_50(self):
-        """LD D,B"""
+        """LD D, B"""
         self.R.D = self.R.B
         return 4
 
     def LD_51(self):
-        """LD D,C"""
+        """LD D, C"""
         self.R.D = self.R.C
         return 4
 
     def LD_52(self):
-        """LD D,D"""
+        """LD D, D"""
         self.R.D = self.R.D
         return 4
 
     def LD_53(self):
-        """LD D,E"""
+        """LD D, E"""
         self.R.D = self.R.E
         return 4
 
     def LD_54(self):
-        """LD D,H"""
+        """LD D, H"""
         self.R.D = self.R.H
         return 4
 
     def LD_55(self):
-        """LD D,L"""
+        """LD D, L"""
         self.R.D = self.R.L
         return 4
 
     def LD_56(self):
-        """LD D,[HL]"""
+        """LD D, [HL]"""
         self.R.D = self.mmu.get_memory(self.R.HL)
         return 8
 
     def LD_57(self):
-        """LD D,A"""
+        """LD D, A"""
         self.R.D = self.R.A
         return 4
 
     def LD_58(self):
-        """LD E,B"""
+        """LD E, B"""
         self.R.E = self.R.B
         return 4
 
     def LD_59(self):
-        """LD E,C"""
+        """LD E, C"""
         self.R.E = self.R.C
         return 4
 
     def LD_5A(self):
-        """LD E,D"""
+        """LD E, D"""
         self.R.E = self.R.D
         return 4
 
     def LD_5B(self):
-        """LD E,E"""
+        """LD E, E"""
         self.R.E = self.R.E
         return 4
 
     def LD_5C(self):
-        """LD E,H"""
+        """LD E, H"""
         self.R.E = self.R.H
         return 4
 
     def LD_5D(self):
-        """LD E,L"""
+        """LD E, L"""
         self.R.E = self.R.L
         return 4
 
     def LD_5E(self):
-        """LD E,[HL]"""
+        """LD E, [HL]"""
         self.R.E = self.mmu.get_memory(self.R.HL)
         return 8
 
     def LD_5F(self):
-        """LD E,A"""
+        """LD E, A"""
         self.R.E = self.R.A
         return 4
 
     def LD_60(self):
-        """LD H,B"""
+        """LD H, B"""
         self.R.H = self.R.B
         return 4
 
     def LD_61(self):
-        """LD H,C"""
+        """LD H, C"""
         self.R.H = self.R.C
         return 4
 
     def LD_62(self):
-        """LD H,D"""
+        """LD H, D"""
         self.R.H = self.R.D
         return 4
 
     def LD_63(self):
-        """LD H,E"""
+        """LD H, E"""
         self.R.H = self.R.E
         return 4
 
     def LD_64(self):
-        """LD H,H"""
+        """LD H, H"""
         self.R.H = self.R.H
         return 4
 
     def LD_65(self):
-        """LD H,L"""
+        """LD H, L"""
         self.R.H = self.R.L
         return 4
 
     def LD_66(self):
-        """LD H,[HL]"""
+        """LD H, [HL]"""
         self.R.H = self.mmu.get_memory(self.R.HL)
         return 8
 
     def LD_67(self):
-        """LD H,A"""
+        """LD H, A"""
         self.R.H = self.R.A
         return 4
 
     def LD_68(self):
-        """LD L,B"""
+        """LD L, B"""
         self.R.L = self.R.B
         return 4
 
     def LD_69(self):
-        """LD L,C"""
+        """LD L, C"""
         self.R.L = self.R.C
         return 4
 
     def LD_6A(self):
-        """LD L,D"""
+        """LD L, D"""
         self.R.L = self.R.D
         return 4
 
     def LD_6B(self):
-        """LD L,E"""
+        """LD L, E"""
         self.R.L = self.R.E
         return 4
 
     def LD_6C(self):
-        """LD L,H"""
+        """LD L, H"""
         self.R.L = self.R.H
         return 4
 
     def LD_6D(self):
-        """LD L,L"""
+        """LD L, L"""
         self.R.L = self.R.L
         return 4
 
     def LD_6E(self):
-        """LD L,[HL]"""
+        """LD L, [HL]"""
         self.R.L = self.mmu.get_memory(self.R.HL)
         return 8
 
     def LD_6F(self):
-        """LD L,A"""
+        """LD L, A"""
         self.R.L = self.R.A
         return 4
 
     def LD_70(self):
-        """LD [HL],B"""
+        """LD [HL], B"""
         self.mmu.set_memory(self.R.HL, self.R.B)
         return 8
 
     def LD_71(self):
-        """LD [HL],C"""
+        """LD [HL], C"""
         self.mmu.set_memory(self.R.HL, self.R.C)
         return 8
 
     def LD_72(self):
-        """LD [HL],D"""
+        """LD [HL], D"""
         self.mmu.set_memory(self.R.HL, self.R.D)
         return 8
 
     def LD_73(self):
-        """LD [HL],E"""
+        """LD [HL], E"""
         self.mmu.set_memory(self.R.HL, self.R.E)
         return 8
 
     def LD_74(self):
-        """LD [HL],H"""
+        """LD [HL], H"""
         self.mmu.set_memory(self.R.HL, self.R.H)
         return 8
 
     def LD_75(self):
-        """LD [HL],L"""
+        """LD [HL], L"""
         self.mmu.set_memory(self.R.HL, self.R.L)
         return 8
 
@@ -1749,47 +1758,47 @@ class Opcodes:
         return 4
 
     def LD_77(self):
-        """LD [HL],A"""
+        """LD [HL], A"""
         self.mmu.set_memory(self.R.HL, self.R.A)
         return 8
 
     def LD_78(self):
-        """LD A,B"""
+        """LD A, B"""
         self.R.A = self.R.B
         return 4
 
     def LD_79(self):
-        """LD A,C"""
+        """LD A, C"""
         self.R.A = self.R.C
         return 4
 
     def LD_7A(self):
-        """LD A,D"""
+        """LD A, D"""
         self.R.A = self.R.D
         return 4
 
     def LD_7B(self):
-        """LD A,E"""
+        """LD A, E"""
         self.R.A = self.R.E
         return 4
 
     def LD_7C(self):
-        """LD A,H"""
+        """LD A, H"""
         self.R.A = self.R.H
         return 4
 
     def LD_7D(self):
-        """LD A,L"""
+        """LD A, L"""
         self.R.A = self.R.L
         return 4
 
     def LD_7E(self):
-        """LD A,[HL]"""
+        """LD A, [HL]"""
         self.R.A = self.mmu.get_memory(self.R.HL)
         return 8
 
     def LD_7F(self):
-        """LD A,A"""
+        """LD A, A"""
         self.R.A = self.R.A
         return 4
 
@@ -1799,50 +1808,48 @@ class Opcodes:
         final = helpers.wrap_8bit(calc)
         self.R.A = final
 
-        self.R.ZERO = 1 if final == 0 else 0
+        self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = (
-            1 if helpers.getLowerNibble(initial) > helpers.getLowerNibble(value) else 0
-        )
-        self.R.CARRY = 1 if calc > 255 else 0
+        self.R.HALFCARRY = ((initial & 0xF) + (value & 0xF) > 0xF) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
 
     def ADD_80(self):
-        """ADD A,B"""
+        """ADD A, B"""
         self.ADD_A_N8(self.R.B)
         return 4
 
     def ADD_81(self):
-        """ADD A,C"""
+        """ADD A, C"""
         self.ADD_A_N8(self.R.C)
         return 4
 
     def ADD_82(self):
-        """ADD A,D"""
+        """ADD A, D"""
         self.ADD_A_N8(self.R.D)
         return 4
 
     def ADD_83(self):
-        """ADD A,E"""
+        """ADD A, E"""
         self.ADD_A_N8(self.R.E)
         return 4
 
     def ADD_84(self):
-        """ADD A,H"""
+        """ADD A, H"""
         self.ADD_A_N8(self.R.H)
         return 4
 
     def ADD_85(self):
-        """ADD A,L"""
+        """ADD A, L"""
         self.ADD_A_N8(self.R.L)
         return 4
 
     def ADD_86(self):
-        """ADD A,[HL]"""
+        """ADD A, [HL]"""
         self.ADD_A_N8(self.mmu.get_memory(self.R.HL))
         return 8
 
     def ADD_87(self):
-        """ADD A,A"""
+        """ADD A, A"""
         self.ADD_A_N8(self.R.A)
         return 4
 
@@ -1853,50 +1860,48 @@ class Opcodes:
         final = helpers.wrap_8bit(calc)
         self.R.A = final
 
-        self.R.ZERO = 1 if final == 0 else 0
+        self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = (
-            1 if helpers.getLowerNibble(initial) > helpers.getLowerNibble(value) else 0
-        )
-        self.R.CARRY = 1 if calc > 255 else 0
+        self.R.HALFCARRY = ((initial & 0xF) + (value & 0xF) > 0xF) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
 
     def ADC_88(self):
-        """ADC A,B"""
+        """ADC A, B"""
         self.ADC_A_N8(self.R.B)
         return 4
 
     def ADC_89(self):
-        """ADC A,C"""
+        """ADC A, C"""
         self.ADC_A_N8(self.R.C)
         return 4
 
     def ADC_8A(self):
-        """ADC A,D"""
+        """ADC A, D"""
         self.ADC_A_N8(self.R.D)
         return 4
 
     def ADC_8B(self):
-        """ADC A,E"""
+        """ADC A, E"""
         self.ADC_A_N8(self.R.E)
         return 4
 
     def ADC_8C(self):
-        """ADC A,H"""
+        """ADC A, H"""
         self.ADC_A_N8(self.R.H)
         return 4
 
     def ADC_8D(self):
-        """ADC A,L"""
+        """ADC A, L"""
         self.ADC_A_N8(self.R.L)
         return 4
 
     def ADC_8E(self):
-        """ADC A,[HL]"""
+        """ADC A, [HL]"""
         self.ADC_A_N8(self.mmu.get_memory(self.R.HL))
         return 8
 
     def ADC_8F(self):
-        """ADC A,A"""
+        """ADC A, A"""
         self.ADC_A_N8(self.R.A)
         return 4
 
@@ -1906,50 +1911,48 @@ class Opcodes:
         final = helpers.wrap_8bit(calc)
         self.R.A = final
 
-        self.R.ZERO = 1 if final == 0 else 0
+        self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 1
-        self.R.HALFCARRY = (
-            1 if helpers.getLowerNibble(value) > helpers.getLowerNibble(initial) else 0
-        )
-        self.R.CARRY = 1 if calc < 0 else 0
+        self.R.HALFCARRY = ((initial & 0xF) - (value & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
 
     def SUB_90(self):
-        """SUB A,B"""
+        """SUB A, B"""
         self.SUB_A_N8(self.R.B)
         return 4
 
     def SUB_91(self):
-        """SUB A,C"""
+        """SUB A, C"""
         self.SUB_A_N8(self.R.C)
         return 4
 
     def SUB_92(self):
-        """SUB A,D"""
+        """SUB A, D"""
         self.SUB_A_N8(self.R.D)
         return 4
 
     def SUB_93(self):
-        """SUB A,E"""
+        """SUB A, E"""
         self.SUB_A_N8(self.R.E)
         return 4
 
     def SUB_94(self):
-        """SUB A,H"""
+        """SUB A, H"""
         self.SUB_A_N8(self.R.H)
         return 4
 
     def SUB_95(self):
-        """SUB A,L"""
+        """SUB A, L"""
         self.SUB_A_N8(self.R.L)
         return 4
 
     def SUB_96(self):
-        """SUB A,[HL]"""
+        """SUB A, [HL]"""
         self.SUB_A_N8(self.mmu.get_memory(self.R.HL))
         return 8
 
     def SUB_97(self):
-        """SUB A,A"""
+        """SUB A, A"""
         self.SUB_A_N8(self.R.A)
         return 4
 
@@ -1960,50 +1963,48 @@ class Opcodes:
         final = helpers.wrap_8bit(calc)
         self.R.A = final
 
-        self.R.ZERO = 1 if final == 0 else 0
+        self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 1
-        self.R.HALFCARRY = (
-            1 if helpers.getLowerNibble(value) > helpers.getLowerNibble(initial) else 0
-        )
-        self.R.CARRY = 1 if calc < 0 else 0
+        self.R.HALFCARRY = ((initial & 0xF) - (value & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
 
     def SBC_98(self):
-        """SBC A,B"""
+        """SBC A, B"""
         self.SBC_A_N8(self.R.B)
         return 4
 
     def SBC_99(self):
-        """SBC A,C"""
+        """SBC A, C"""
         self.SBC_A_N8(self.R.C)
         return 4
 
     def SBC_9A(self):
-        """SBC A,D"""
+        """SBC A, D"""
         self.SBC_A_N8(self.R.D)
         return 4
 
     def SBC_9B(self):
-        """SBC A,E"""
+        """SBC A, E"""
         self.SBC_A_N8(self.R.E)
         return 4
 
     def SBC_9C(self):
-        """SBC A,H"""
+        """SBC A, H"""
         self.SBC_A_N8(self.R.H)
         return 4
 
     def SBC_9D(self):
-        """SBC A,L"""
+        """SBC A, L"""
         self.SBC_A_N8(self.R.L)
         return 4
 
     def SBC_9E(self):
-        """SBC A,[HL]"""
+        """SBC A, [HL]"""
         self.SBC_A_N8(self.mmu.get_memory(self.R.HL))
         return 8
 
     def SBC_9F(self):
-        """SBC A,A"""
+        """SBC A, A"""
         self.SBC_A_N8(self.R.A)
         return 4
 
@@ -2012,48 +2013,48 @@ class Opcodes:
         calc = initial & value
         self.R.A = calc
 
-        self.R.ZERO = 1 if calc == 0 else 0
+        self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 1
         self.R.CARRY = 0
 
     def AND_A0(self):
-        """AND A,B"""
+        """AND A, B"""
         self.AND_A_N8(self.R.B)
         return 4
 
     def AND_A1(self):
-        """AND A,C"""
+        """AND A, C"""
         self.AND_A_N8(self.R.C)
         return 4
 
     def AND_A2(self):
-        """AND A,D"""
+        """AND A, D"""
         self.AND_A_N8(self.R.D)
         return 4
 
     def AND_A3(self):
-        """AND A,E"""
+        """AND A, E"""
         self.AND_A_N8(self.R.E)
         return 4
 
     def AND_A4(self):
-        """AND A,H"""
+        """AND A, H"""
         self.AND_A_N8(self.R.H)
         return 4
 
     def AND_A5(self):
-        """AND A,L"""
+        """AND A, L"""
         self.AND_A_N8(self.R.L)
         return 4
 
     def AND_A6(self):
-        """AND A,[HL]"""
+        """AND A, [HL]"""
         self.AND_A_N8(self.mmu.get_memory(self.R.HL))
         return 8
 
     def AND_A7(self):
-        """AND A,A"""
+        """AND A, A"""
         self.AND_A_N8(self.R.A)
         return 4
 
@@ -2062,48 +2063,48 @@ class Opcodes:
         calc = initial ^ value
         self.R.A = calc
 
-        self.R.ZERO = 1 if calc == 0 else 0
+        self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = 0
 
     def XOR_A8(self):
-        """XOR A,B"""
+        """XOR A, B"""
         self.XOR_A_N8(self.R.B)
         return 4
 
     def XOR_A9(self):
-        """XOR A,C"""
+        """XOR A, C"""
         self.XOR_A_N8(self.R.C)
         return 4
 
     def XOR_AA(self):
-        """XOR A,D"""
+        """XOR A, D"""
         self.XOR_A_N8(self.R.D)
         return 4
 
     def XOR_AB(self):
-        """XOR A,E"""
+        """XOR A, E"""
         self.XOR_A_N8(self.R.E)
         return 4
 
     def XOR_AC(self):
-        """XOR A,H"""
+        """XOR A, H"""
         self.XOR_A_N8(self.R.H)
         return 4
 
     def XOR_AD(self):
-        """XOR A,L"""
+        """XOR A, L"""
         self.XOR_A_N8(self.R.L)
         return 4
 
     def XOR_AE(self):
-        """XOR A,[HL]"""
+        """XOR A, [HL]"""
         self.XOR_A_N8(self.mmu.get_memory(self.R.HL))
         return 8
 
     def XOR_AF(self):
-        """XOR A,A"""
+        """XOR A, A"""
         self.XOR_A_N8(self.R.A)
         return 4
 
@@ -2112,48 +2113,48 @@ class Opcodes:
         calc = initial | value
         self.R.A = calc
 
-        self.R.ZERO = 1 if calc == 0 else 0
+        self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = 0
 
     def OR_B0(self):
-        """OR A,B"""
+        """OR A, B"""
         self.OR_A_N8(self.R.B)
         return 4
 
     def OR_B1(self):
-        """OR A,C"""
+        """OR A, C"""
         self.OR_A_N8(self.R.C)
         return 4
 
     def OR_B2(self):
-        """OR A,D"""
+        """OR A, D"""
         self.OR_A_N8(self.R.D)
         return 4
 
     def OR_B3(self):
-        """OR A,E"""
+        """OR A, E"""
         self.OR_A_N8(self.R.E)
         return 4
 
     def OR_B4(self):
-        """OR A,H"""
+        """OR A, H"""
         self.OR_A_N8(self.R.H)
         return 4
 
     def OR_B5(self):
-        """OR A,L"""
+        """OR A, L"""
         self.OR_A_N8(self.R.L)
         return 4
 
     def OR_B6(self):
-        """OR A,[HL]"""
+        """OR A, [HL]"""
         self.OR_A_N8(self.mmu.get_memory(self.R.HL))
         return 8
 
     def OR_B7(self):
-        """OR A,A"""
+        """OR A, A"""
         self.OR_A_N8(self.R.A)
         return 4
 
@@ -2161,50 +2162,48 @@ class Opcodes:
         initial = self.R.A
         calc = initial - value
         final = helpers.wrap_8bit(calc)
-        self.R.ZERO = 1 if final == 0 else 0
+        self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 1
-        self.R.HALFCARRY = (
-            1 if helpers.getLowerNibble(value) > helpers.getLowerNibble(initial) else 0
-        )
-        self.R.CARRY = 1 if calc < 0 else 0
+        self.R.HALFCARRY = ((initial & 0xF) - (value & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
 
     def CP_B8(self):
-        """CP A,B"""
+        """CP A, B"""
         self.CP_A_N8(self.R.B)
         return 4
 
     def CP_B9(self):
-        """CP A,C"""
+        """CP A, C"""
         self.CP_A_N8(self.R.C)
         return 4
 
     def CP_BA(self):
-        """CP A,D"""
+        """CP A, D"""
         self.CP_A_N8(self.R.D)
         return 4
 
     def CP_BB(self):
-        """CP A,E"""
+        """CP A, E"""
         self.CP_A_N8(self.R.E)
         return 4
 
     def CP_BC(self):
-        """CP A,H"""
+        """CP A, H"""
         self.CP_A_N8(self.R.H)
         return 4
 
     def CP_BD(self):
-        """CP A,L"""
+        """CP A, L"""
         self.CP_A_N8(self.R.L)
         return 4
 
     def CP_BE(self):
-        """CP A,[HL]"""
+        """CP A, [HL]"""
         self.CP_A_N8(self.mmu.get_memory(self.R.HL))
         return 8
 
     def CP_BF(self):
-        """CP A,A"""
+        """CP A, A"""
         self.CP_A_N8(self.R.A)
         return 4
 
@@ -2243,7 +2242,7 @@ class Opcodes:
         return 16
 
     def ADD_C6(self, value):
-        """ADD A,n8"""
+        """ADD A, n8"""
         self.ADD_A_N8(value)
         return 8
 
@@ -2273,7 +2272,7 @@ class Opcodes:
         initial = value
         carryBit = initial >> 7
         calc = (initial << 1) & 0b11111110 | carryBit
-        self.R.ZERO = 1 if calc == 0 else 0
+        self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
@@ -2324,7 +2323,7 @@ class Opcodes:
         carryBit = initial & 1
         calc = (carryBit << 7) | initial >> 1
 
-        self.R.ZERO = 1 if calc == 0 else 0
+        self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
@@ -2374,7 +2373,7 @@ class Opcodes:
         initial = register
         carryBit = initial >> 7
         calc = (initial << 1) & 0b11111110 | self.R.CARRY
-        self.R.ZERO = 1 if calc == 0 else 0
+        self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
@@ -2425,7 +2424,7 @@ class Opcodes:
         carryBit = initial & 1
         calc = (self.R.CARRY << 7) | initial >> 1
 
-        self.R.ZERO = 1 if calc == 0 else 0
+        self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
@@ -2475,7 +2474,7 @@ class Opcodes:
         initial = register
         carryBit = initial >> 7
         calc = (initial << 1) & 0b11111110
-        self.R.ZERO = 1 if calc == 0 else 0
+        self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
@@ -2526,7 +2525,7 @@ class Opcodes:
         carryBit = initial & 1
         calc = (initial >> 7) << 7 | initial >> 1
 
-        self.R.ZERO = 1 if calc == 0 else 0
+        self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
@@ -2575,7 +2574,7 @@ class Opcodes:
     def SWAP_R8(self, register):
         initial = register
         calc = (initial & 0b1111) << 4 | (initial >> 4)
-        self.R.ZERO = 1 if calc == 0 else 0
+        self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = 0
@@ -2626,7 +2625,7 @@ class Opcodes:
         carryBit = initial & 1
         calc = initial >> 1 & 0b011111111
 
-        self.R.ZERO = 1 if calc == 0 else 0
+        self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
@@ -2675,7 +2674,7 @@ class Opcodes:
     def BIT_U3R8(self, register, value):
         initial = register
         calc = initial >> (value) & 0b1
-        self.R.ZERO = 1 if calc == 0 else 0
+        self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 1
 
@@ -3668,7 +3667,7 @@ class Opcodes:
         return 24
 
     def ADC_CE(self, value):
-        """ADC A,n8"""
+        """ADC A, n8"""
         self.ADC_A_N8(value)
         return 8
 
@@ -3707,7 +3706,7 @@ class Opcodes:
         return 16
 
     def SUB_D6(self, value):
-        """SUB A,n8"""
+        """SUB A, n8"""
         self.SUB_A_N8(value)
         return 8
 
@@ -3729,7 +3728,7 @@ class Opcodes:
         return 16
 
     def JP_DA(self, address):
-        """JP C,n16"""
+        """JP C, n16"""
         if self.R.CARRY == 1:
             self.R.PC = address
         return 30
@@ -3742,7 +3741,7 @@ class Opcodes:
         return 36
 
     def SBC_DE(self, value):
-        """SBC A,n8"""
+        """SBC A, n8"""
         self.SBC_A_N8(value)
         return 8
 
@@ -3762,7 +3761,7 @@ class Opcodes:
         return 12
 
     def LDH_E2(self):
-        """LDH [C],A"""
+        """LDH [C], A"""
         self.mmu.set_memory(0xFF00 + self.R.C, self.R.A)
         return 8
 
@@ -3772,7 +3771,7 @@ class Opcodes:
         return 16
 
     def AND_E6(self, value):
-        """AND A,n8"""
+        """AND A, n8"""
         self.AND_A_N8(value)
         return 8
 
@@ -3782,7 +3781,7 @@ class Opcodes:
         return 16
 
     def ADD_E8(self, value):
-        """ADD SP,e8"""
+        """ADD SP, e8"""
         initial = self.R.SP
         calc = initial + helpers.signed_value(value)
         final = helpers.wrap_16bit(calc)
@@ -3790,10 +3789,8 @@ class Opcodes:
 
         self.R.ZERO = 0
         self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = (
-            1 if helpers.getLowerNibble(initial) > helpers.getLowerNibble(value) else 0
-        )
-        self.R.CARRY = 1 if calc > 255 else 0
+        self.R.HALFCARRY = ((initial & 0xF) + (value & 0xF) > 0xF) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 16
 
     def JP_E9(self):
@@ -3807,7 +3804,7 @@ class Opcodes:
         return 16
 
     def XOR_EE(self, value):
-        """XOR A,n8"""
+        """XOR A, n8"""
         self.XOR_A_N8(value)
         return 8
 
@@ -3817,7 +3814,7 @@ class Opcodes:
         return 16
 
     def LDH_F0(self, offset):
-        """LDH A,[n8]"""
+        """LDH A, [n8]"""
         self.R.A = self.mmu.get_memory(0xFF00 + offset)
         return 12
 
@@ -3827,7 +3824,7 @@ class Opcodes:
         return 12
 
     def LDH_F2(self):
-        """LDH A,[C]"""
+        """LDH A, [C]"""
         self.R.A = self.mmu.get_memory(0xFF00 + self.R.C)
         return 8
 
@@ -3843,7 +3840,7 @@ class Opcodes:
         return 16
 
     def OR_F6(self, value):
-        """OR A,n8"""
+        """OR A, n8"""
         self.OR_A_N8(value)
         return 8
 
@@ -3853,18 +3850,18 @@ class Opcodes:
         return 16
 
     def LD_F8(self, value):
-        """LD HL,SP+e8"""
+        """LD HL, SP + e8"""
         addr = helpers.signed_value(value)
         self.R.HL = helpers.wrap_16bit(self.R.SP + addr)
         return 12
 
     def LD_F9(self):
-        """LD SP,HL"""
+        """LD SP, HL"""
         self.R.SP = self.R.HL
         return 8
 
     def LD_FA(self, address):
-        """LD A,[n16]"""
+        """LD A, [n16]"""
         self.R.A = self.mmu.get_memory(address)
         return 16
 
@@ -3875,7 +3872,7 @@ class Opcodes:
         return 4
 
     def CP_FE(self, value):
-        """CP A,n8"""
+        """CP A, n8"""
         self.CP_A_N8(value)
         return 8
 

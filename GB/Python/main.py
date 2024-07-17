@@ -41,8 +41,8 @@ try:
         # region DEBUG
         if DEBUG:
             print(
-                helpers.int_to_hex(R.PC),
-                helpers.int_to_hex(PC_DATA + 0xCB00 if CB_FLAG else PC_DATA),
+                helpers.formatted_hex(R.PC),
+                helpers.formatted_hex(PC_DATA + 0xCB00 if CB_FLAG else PC_DATA),
             )
             R.debug()
         # endregion

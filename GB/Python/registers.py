@@ -102,7 +102,7 @@ class Registers:
             "PC": self.PC,
             "SP": self.SP,
         }
-        print([{c: helpers.int_to_hex(data[c])} for c in data])
+        print([{c: helpers.formatted_hex(data[c])} for c in data])
         print(
             {
                 "Z": self.ZERO,
@@ -154,19 +154,22 @@ class IO:
             case 0xFF00:
                 return self.JOYP.get()
             case addr if 0xFF01 <= addr <= 0xFF02:
-                print("TODO handle serial", helpers.int_to_hex(address))
+                print("TODO handle serial", helpers.formatted_hex(address))
+                return 0xFF
             case addr if 0xFF04 <= addr <= 0xFF07:
-                print("TODO handle timer registers", helpers.int_to_hex(address))
+                print("TODO handle timer registers", helpers.formatted_hex(address))
+                return 0xFF
             case 0xFF0F:
                 return self.IF.get()
             case addr if 0xFF10 <= addr <= 0xFF26:
-                print("TODO handle audio registers", helpers.int_to_hex(address))
+                print("TODO handle audio registers", helpers.formatted_hex(address))
+                return 0xFF
             case addr if 0xFF30 <= addr <= 0xFF3F:
                 return self.WAVE[address - 0xFF30]
             case addr if 0xFF40 <= addr <= 0xFF4B:
                 return self.LCD.get(addr)
             case _:
-                print(f"Ignoring IO Address GET: {helpers.int_to_hex(address)}")
+                print(f"Ignoring IO Address GET: {helpers.formatted_hex(address)}")
                 return 0xFF
 
     def set(self, address, value):
@@ -174,20 +177,20 @@ class IO:
             case 0xFF00:
                 self.JOYP.set(value)
             case addr if 0xFF01 <= addr <= 0xFF02:
-                print("TODO handle serial", helpers.int_to_hex(address))
+                print("TODO handle serial", helpers.formatted_hex(address))
             case addr if 0xFF04 <= addr <= 0xFF07:
-                print("TODO handle timer registers", helpers.int_to_hex(address))
+                print("TODO handle timer registers", helpers.formatted_hex(address))
             case 0xFF0F:
                 self.IF.set(value)
             case addr if 0xFF10 <= addr <= 0xFF26:
-                print("TODO handle audio registers", helpers.int_to_hex(address))
+                print("TODO handle audio registers", helpers.formatted_hex(address))
             case addr if 0xFF30 <= addr <= 0xFF3F:
                 self.WAVE[address - 0xFF30] = value
             case addr if 0xFF40 <= addr <= 0xFF4B:
                 self.LCD.set(addr, value)
             case _:
                 print(
-                    f"Ignoring IO Address SET: {helpers.int_to_hex(address)} {helpers.int_to_hex(value)}"
+                    f"Ignoring IO Address SET: {helpers.formatted_hex(address)} {helpers.formatted_hex(value)}"
                 )
 
     def dump(self):

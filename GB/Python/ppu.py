@@ -101,7 +101,7 @@ class PPU:
             case 0xFF4B:
                 return self.WX
             case _:
-                raise Exception("Unknown IO Register:", helpers.int_to_hex(addr))
+                raise Exception("Unknown IO Register:", helpers.formatted_hex(addr))
 
     def set(self, addr, value):
         match addr:
@@ -130,7 +130,7 @@ class PPU:
             case 0xFF4B:
                 self.WX = value
             case _:
-                raise Exception("Unknown IO Register:", helpers.int_to_hex(addr))
+                raise Exception("Unknown IO Register:", helpers.formatted_hex(addr))
 
     # Tilemap 1 9800 -> 9BFF
     # Tilemap 2 9C00 -> 9FFF
