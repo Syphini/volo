@@ -55,7 +55,7 @@ try:
 
             opcodes.execute_cb(PC_DATA)
 
-            mmu.IO.LCD.tick()
+            mmu.IO.LCD.tick(sum(opinfo["cycles"]))
 
             continue
 
@@ -91,7 +91,7 @@ try:
         opcodes.execute(PC_DATA, opData)
         # endregion
 
-        mmu.IO.LCD.tick()
+        mmu.IO.LCD.tick(sum(opinfo["cycles"]))
 
 except Exception as e:
     print("------")

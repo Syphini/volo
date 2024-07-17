@@ -90,6 +90,8 @@ class Opcodes:
                 self.DEC_25()
             case 0x26:
                 self.LD_26(value)
+            case 0x27:
+                self.DAA_27()
             case 0x28:
                 self.JR_28(value)
             case 0x29:
@@ -1100,6 +1102,7 @@ class Opcodes:
         carryBit = initial >> 7
         calc = (initial << 1) & 0b11111110 | carryBit
         self.R.A = calc
+
         self.R.ZERO = 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
@@ -1141,9 +1144,10 @@ class Opcodes:
     def RRCA_0F(self):
         """RRCA"""
         initial = self.R.A
-        carryBit = initial & 0b1
+        carryBit = initial & 1
         calc = (carryBit << 7) | initial >> 1
         self.R.A = calc
+
         self.R.ZERO = 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
@@ -1179,6 +1183,7 @@ class Opcodes:
         carryBit = initial >> 7
         calc = (initial << 1) & 0b11111110 | self.R.CARRY
         self.R.A = calc
+
         self.R.ZERO = 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
@@ -1220,13 +1225,14 @@ class Opcodes:
     def RRA_1F(self):
         """RRA"""
         initial = self.R.A
-        carryBit = initial & 0b1
+        carryBit = initial & 1
         calc = (self.R.CARRY << 7) | initial >> 1
+        self.R.A = calc
+
         self.R.ZERO = 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
-        return calc
 
     def JR_20(self, value):
         """JR NZ,e8"""
@@ -1257,6 +1263,28 @@ class Opcodes:
     def LD_26(self, value):
         """LD H,n8"""
         self.R.H = value
+
+    def DAA_27(self):
+        """DAA"""
+        # Credit to https://blog.ollien.com/posts/gb-daa/ for the logic
+        offset = 0
+        carryBit = 0
+
+        if (self.R.SUBTRACTION == 0 and self.R.A & 0xF > 0x09) or self.R.HALFCARRY == 1:
+            offset |= 0x06
+        if (self.R.SUBTRACTION == 0 and self.R.A > 0x99) or self.R.CARRY == 1:
+            offset |= 0x60
+            carryBit = 1
+
+        final = (
+            helpers.wrap_8(self.R.A + offset)
+            if self.R.SUBTRACTION == 0
+            else helpers.wrap_8(self.R.A - offset)
+        )
+        self.R.A = final
+        self.R.ZERO = 1 if final == 0 else 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
 
     def JR_28(self, value):
         """JR Z,e8"""
@@ -1635,6 +1663,7 @@ class Opcodes:
         calc = initial + value
         final = helpers.wrap_8(calc)
         self.R.A = final
+
         self.R.ZERO = 1 if final == 0 else 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = (
@@ -1680,6 +1709,7 @@ class Opcodes:
         calc = initial + value
         final = helpers.wrap_8(calc)
         self.R.A = final
+
         self.R.ZERO = 1 if final == 0 else 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = (
@@ -1724,6 +1754,7 @@ class Opcodes:
         calc = initial - value
         final = helpers.wrap_8(calc)
         self.R.A = final
+
         self.R.ZERO = 1 if final == 0 else 0
         self.R.SUBTRACTION = 1
         self.R.HALFCARRY = (
@@ -1769,6 +1800,7 @@ class Opcodes:
         calc = initial - value
         final = helpers.wrap_8(calc)
         self.R.A = final
+
         self.R.ZERO = 1 if final == 0 else 0
         self.R.SUBTRACTION = 1
         self.R.HALFCARRY = (
@@ -1812,6 +1844,7 @@ class Opcodes:
         initial = self.R.A
         calc = initial & value
         self.R.A = calc
+
         self.R.ZERO = 1 if calc == 0 else 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 1
@@ -1853,6 +1886,7 @@ class Opcodes:
         initial = self.R.A
         calc = initial ^ value
         self.R.A = calc
+
         self.R.ZERO = 1 if calc == 0 else 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
@@ -1894,6 +1928,7 @@ class Opcodes:
         initial = self.R.A
         calc = initial | value
         self.R.A = calc
+
         self.R.ZERO = 1 if calc == 0 else 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
@@ -2068,8 +2103,9 @@ class Opcodes:
 
     def RRC_R8(self, register):
         initial = register
-        carryBit = initial & 0b1
+        carryBit = initial & 1
         calc = (carryBit << 7) | initial >> 1
+
         self.R.ZERO = 1 if calc == 0 else 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
@@ -2152,8 +2188,9 @@ class Opcodes:
 
     def RR_R8(self, register):
         initial = register
-        carryBit = initial & 0b1
+        carryBit = initial & 1
         calc = (self.R.CARRY << 7) | initial >> 1
+
         self.R.ZERO = 1 if calc == 0 else 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
@@ -2236,8 +2273,9 @@ class Opcodes:
 
     def SRA_R8(self, register):
         initial = register
-        carryBit = initial & 0b1
+        carryBit = initial & 1
         calc = (initial >> 7) << 7 | initial >> 1
+
         self.R.ZERO = 1 if calc == 0 else 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
@@ -2319,8 +2357,9 @@ class Opcodes:
 
     def SRL_R8(self, register):
         initial = register
-        carryBit = initial & 0b1
+        carryBit = initial & 1
         calc = initial >> 1 & 0b011111111
+
         self.R.ZERO = 1 if calc == 0 else 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
@@ -3258,7 +3297,8 @@ class Opcodes:
         initial = self.R.SP
         calc = initial + helpers.signed_value(value)
         final = helpers.wrap_16(calc)
-        self.R.A = final
+        self.R.SP = final
+
         self.R.ZERO = 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = (
@@ -3314,7 +3354,7 @@ class Opcodes:
     def LD_F8(self, value):
         """LD HL,SP+e8"""
         addr = helpers.signed_value(value)
-        self.R.HL = self.R.SP + addr
+        self.R.HL = helpers.wrap_16(self.R.SP + addr)
 
     def LD_F9(self):
         """LD SP,HL"""

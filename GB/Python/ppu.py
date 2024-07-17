@@ -135,7 +135,7 @@ class PPU:
     # Tilemap 1 9800 -> 9BFF
     # Tilemap 2 9C00 -> 9FFF
 
-    def tick(self):
+    def tick(self, cycles: int):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.mmu.dump()
@@ -143,39 +143,43 @@ class PPU:
                 print("Closed App")
                 sys.exit()
 
-        match self._MODE:
-            case 2:  # OAM
-                if self._CLOCK == 80:
-                    self._MODE = 3
-                    self._CLOCK = 0
-            case 3:  # Pixel
-                if self._CLOCK == 172:
-                    self._MODE = 0
-                    self._CLOCK = 0
+        for _ in range(cycles):
+            match self._MODE:
+                case 2:  # OAM
+                    if self._CLOCK == 80:
+                        self._MODE = 3
+                        self._CLOCK = 0
+                case 3:  # Pixel
+                    if self._CLOCK == 172:
+                        self._MODE = 0
+                        self._CLOCK = 0
 
-                    self.drawline()
-            case 0:  # H-Blank
-                if self._CLOCK == 204:
-                    self._LY += 1
+                        self.drawline()
+                case 0:  # H-Blank
+                    if self._CLOCK == 204:
+                        self._LY += 1
 
-                    if self._LY == 143:
-                        self._MODE = 1
-                    else:
-                        self._MODE = 2
-                    self._CLOCK = 0
-            case 1:  # V-Blank
-                if self._CLOCK == 456:
-                    self._LY += 1
-                    self._CLOCK = 0
+                        if self._LY == 143:
+                            self._MODE = 1
+                        else:
+                            self._MODE = 2
+                        self._CLOCK = 0
+                case 1:  # V-Blank
+                    if self._CLOCK == 456:
+                        self._LY += 1
+                        self._CLOCK = 0
 
-                    if self._LY > 153:
-                        self._MODE = 2
-                        self._LY = 0
-                        newTime = time.time() * 1000
-                        print("Frame Drawn", newTime - self._DEBUG_TIME)
-                        self._DEBUG_TIME = newTime
+                        if self._LY > 153:
+                            self._MODE = 2
+                            self._LY = 0
 
-        self._CLOCK += 1
+                            # region DEBUG
+                            newTime = time.time() * 1000
+                            print("Frame Drawn:", newTime - self._DEBUG_TIME)
+                            self._DEBUG_TIME = newTime
+                            # endregion
+
+            self._CLOCK += 1
 
     def tile_to_colours(self, tile_bytes: bytearray):
         """Convert byte data into tile data"""
@@ -231,12 +235,12 @@ class PPU:
         y = self._LY
 
         for x in range(self.SCREEN_X):
-            tileData = self.tile_to_colours(self.get_tile(x, y))
-            self.draw_pixel(
-                helpers.wrap_8(x + self.SCX),
-                helpers.wrap_8(y + self.SCY),
-                tileData[y % 8][x % 8],
+            tileData = self.tile_to_colours(
+                self.get_tile(
+                    helpers.wrap_8(x + self.SCX), helpers.wrap_8(y + self.SCY)
+                )
             )
+            self.draw_pixel(x, y, tileData[y % 8][x % 8])
         pygame.display.flip()
 
     def clear_display(self):
