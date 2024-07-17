@@ -101,7 +101,7 @@ class PPU:
             case 0xFF4B:
                 return self.WX
             case _:
-                raise Exception("Unknown IO Register:", hex(addr))
+                raise Exception("Unknown IO Register:", helpers.int_to_hex(addr))
 
     def set(self, addr, value):
         match addr:
@@ -130,7 +130,7 @@ class PPU:
             case 0xFF4B:
                 self.WX = value
             case _:
-                raise Exception("Unknown IO Register:", hex(addr))
+                raise Exception("Unknown IO Register:", helpers.int_to_hex(addr))
 
     # Tilemap 1 9800 -> 9BFF
     # Tilemap 2 9C00 -> 9FFF
@@ -181,28 +181,15 @@ class PPU:
 
             self._CLOCK += 1
 
-    def tile_to_colours(self, tile_bytes: bytearray):
+    def get_tile_colour(self, tile_bytes: bytearray, tileX, tileY):
         """Convert byte data into tile data"""
-        data = []
         if len(tile_bytes) < 16:
             raise Exception("Invalid Tile Data")
 
-        for c in range(len(tile_bytes) - 1):
-            if c % 2 == 1:
-                continue
+        B1 = tile_bytes[tileY] >> 7 - tileX & 1
+        B2 = tile_bytes[tileY + 1] >> 7 - tileX & 1
 
-            BYTE_1 = tile_bytes[c]
-            BYTE_2 = tile_bytes[c + 1]
-
-            colours = []
-            for i in range(8):
-                b1 = bin(BYTE_1)[2:].zfill(8)
-                b2 = bin(BYTE_2)[2:].zfill(8)
-                calc = b2[i] + b1[i]
-                colours.append(int(calc, 2))
-
-            data.append(colours)
-        return data
+        return B2 << 1 | B1
 
     def get_tile(self, x, y):
         """Get tile given current pixel X & Y"""
@@ -232,16 +219,17 @@ class PPU:
 
     def drawline(self):
         """Draw the current scanline"""
+        # TODO make faster
+        # aim:(<40ms/24fps) current:(~70ms/14fps)
         y = self._LY
 
         for x in range(self.SCREEN_X):
-            tileData = self.tile_to_colours(
-                self.get_tile(
-                    helpers.wrap_8(x + self.SCX), helpers.wrap_8(y + self.SCY)
-                )
-            )
-            self.draw_pixel(x, y, tileData[y % 8][x % 8])
-        pygame.display.flip()
+            tile = self.get_tile(
+                helpers.wrap_8bit(x + self.SCX), helpers.wrap_8bit(y + self.SCY)
+            )  # ~10ms
+            colour = self.get_tile_colour(tile, x % 8, (y % 8) * 2)  # ~5ms
+            self.draw_pixel(x, y, colour)  # ~20ms
+        pygame.display.flip()  # ~10ms
 
     def clear_display(self):
         """Clear the canvas"""

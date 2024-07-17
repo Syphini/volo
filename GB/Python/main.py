@@ -7,7 +7,6 @@ from opcodes import Opcodes
 print()
 
 DEBUG = False
-SIMPLE_DEBUG = False
 
 ROM_FILE = "GB/ROM/DMG_ROM.bin"
 
@@ -24,7 +23,6 @@ with open(ROM_FILE, "rb") as f:
         mmu.set_memory(cycle_count, b)
 
 # region CPU Logic
-
 try:
     while True:
         if R.PC >= 0x104 and R.PC < 0x150:
@@ -32,66 +30,27 @@ try:
             R.INCREMENT_PC(1)
             continue
 
+        PC_DATA = mmu.get_memory(R.PC)
+
+        CB_FLAG = False
+        if PC_DATA == 0xCB:
+            CB_FLAG = True
+            PC_DATA = mmu.get_memory(R.PC + 1)
+            R.INCREMENT_PC(1)
+
         # region DEBUG
         if DEBUG:
+            print(
+                helpers.int_to_hex(R.PC),
+                helpers.int_to_hex(PC_DATA + 0xCB00 if CB_FLAG else PC_DATA),
+            )
             R.debug()
         # endregion
 
-        # region I hate all of this
-        PC_DATA = mmu.get_memory(R.PC)
-        if PC_DATA == 0xCB:
-            PC_DATA = mmu.get_memory(R.PC + 1)
-            opinfo = opcodes.opinfo["cbprefixed"][helpers.int_to_hex(PC_DATA)]
-            R.INCREMENT_PC(opinfo["bytes"])  # ??? don't add +1
+        cycles = opcodes.execute(PC_DATA, CB_FLAG)
+        mmu.IO.LCD.tick(cycles)
 
-            # region DEBUG
-            if SIMPLE_DEBUG:
-                print(
-                    helpers.int_to_hex(R.PC),
-                    helpers.int_to_hex(PC_DATA),
-                    opinfo["mnemonic"],
-                )
-            # endregion
-
-            opcodes.execute_cb(PC_DATA)
-
-            mmu.IO.LCD.tick(sum(opinfo["cycles"]))
-
-            continue
-
-        opinfo = opcodes.opinfo["unprefixed"][helpers.int_to_hex(PC_DATA)]
-        opBytes = [
-            c
-            for c in [operand.get("bytes", None) for operand in opinfo["operands"]]
-            if c is not None
-        ]
-        opData = (
-            int.from_bytes(
-                bytes([mmu.get_memory(R.PC + i) for i in range(1, opBytes[0] + 1)]),
-                "little",
-            )
-            if len(opBytes) > 0
-            else None
-        )
-
-        # region DEBUG
-        if SIMPLE_DEBUG:
-            print(
-                helpers.int_to_hex(R.PC),
-                helpers.int_to_hex(PC_DATA),
-                opinfo["mnemonic"],
-                [
-                    helpers.int_to_hex(opData) if c.get("bytes") else c["name"]
-                    for c in opinfo["operands"]
-                ],
-            )
-        # endregion
-
-        R.INCREMENT_PC(opinfo["bytes"])
-        opcodes.execute(PC_DATA, opData)
-        # endregion
-
-        mmu.IO.LCD.tick(sum(opinfo["cycles"]))
+# endregion
 
 except Exception as e:
     print("------")
@@ -100,5 +59,3 @@ except Exception as e:
     traceback.print_exception(e)
     mmu.dump()
     print("Exiting...")
-
-# endregion

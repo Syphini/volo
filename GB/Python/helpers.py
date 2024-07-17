@@ -13,11 +13,11 @@ def hexstring_to_bytearray(hex_data: str):
     return data
 
 
-def wrap_16(value):
+def wrap_16bit(value):
     return value % 0x10000
 
 
-def wrap_8(value):
+def wrap_8bit(value):
     return value % 256
 
 

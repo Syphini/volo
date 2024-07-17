@@ -40,7 +40,7 @@ class MMU:
             case 0xFFFF:
                 return self.IO.IE.get()
             case _:
-                raise Exception("Inaccessible Memory:", hex(address))
+                raise Exception("Inaccessible Memory:", helpers.int_to_hex(address))
 
     def set_memory(self, address, value):
         match address:
@@ -65,7 +65,7 @@ class MMU:
             case 0xFFFF:
                 self.IO.IE.set(value)
             case _:
-                raise Exception("Inaccessible Memory:", hex(address))
+                raise Exception("Inaccessible Memory:", helpers.int_to_hex(address))
 
     def dump(self):
         # Hex Dump
