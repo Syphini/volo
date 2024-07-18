@@ -1409,16 +1409,26 @@ class Opcodes:
 
     def INC_34(self):
         """INC [HL]"""
-        self.mmu.set_memory(
-            self.R.HL, helpers.wrap_8bit(self.mmu.get_memory(self.R.HL) + 1)
-        )
+        initial = self.mmu.get_memory(self.R.HL)
+        final = helpers.wrap_8bit(initial + 1)
+        self.mmu.set_memory(self.R.HL, final)
+
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((initial & 0xF) + 1 > 0xF) & 1
+
         return 12
 
     def DEC_35(self):
         """DEC [HL]"""
-        self.mmu.set_memory(
-            self.R.HL, helpers.wrap_8bit(self.mmu.get_memory(self.R.HL) - 1)
-        )
+        initial = self.mmu.get_memory(self.R.HL)
+        final = helpers.wrap_8bit(initial - 1)
+        self.mmu.set_memory(self.R.HL, final)
+
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((initial & 0xF) - 1 < 0) & 1
+
         return 12
 
     def LD_36(self, value):
@@ -1855,14 +1865,16 @@ class Opcodes:
 
     def ADC_A_N8(self, value):
         initial = self.R.A
-        value = value + self.R.CARRY
-        calc = initial + value
+        carryBit = self.R.CARRY
+        calc = initial + value + carryBit
         final = helpers.wrap_8bit(calc)
         self.R.A = final
 
         self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = ((initial & 0xF) + (value & 0xF) > 0xF) & 1
+        self.R.HALFCARRY = (
+            (initial & 0xF) + (value & 0xF) + (carryBit & 0xF) > 0xF
+        ) & 1
         self.R.CARRY = (calc > 0xFF) & 1
 
     def ADC_88(self):
@@ -1958,14 +1970,16 @@ class Opcodes:
 
     def SBC_A_N8(self, value):
         initial = self.R.A
-        value = value + self.R.CARRY
-        calc = initial - value
+        carryBit = self.R.CARRY
+        calc = initial - (value + carryBit)
         final = helpers.wrap_8bit(calc)
         self.R.A = final
 
         self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 1
-        self.R.HALFCARRY = ((initial & 0xF) - (value & 0xF) < 0) & 1
+        self.R.HALFCARRY = (
+            (initial & 0xF) - ((value & 0xF) + (carryBit & 0xF)) < 0
+        ) & 1
         self.R.CARRY = (calc < 0) & 1
 
     def SBC_98(self):
@@ -3783,14 +3797,19 @@ class Opcodes:
     def ADD_E8(self, value):
         """ADD SP, e8"""
         initial = self.R.SP
-        calc = initial + helpers.signed_value(value)
-        final = helpers.wrap_16bit(calc)
+        calc = helpers.signed_value(value)
+        final = helpers.wrap_16bit(initial + calc)
         self.R.SP = final
 
         self.R.ZERO = 0
         self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = ((initial & 0xF) + (value & 0xF) > 0xF) & 1
-        self.R.CARRY = (calc > 0xFF) & 1
+        self.R.HALFCARRY = (
+            ((initial & 0xF) + (calc & 0xF) > 0xF)
+            or ((initial & 0xF) + (calc & 0xF) < 0)
+        ) & 1
+        self.R.CARRY = ((initial & 0xFF) + (calc & 0xFF) > 0xFF) or (
+            (initial & 0xFF) + (calc & 0xFF) < 0
+        )
         return 16
 
     def JP_E9(self):
@@ -3852,7 +3871,20 @@ class Opcodes:
     def LD_F8(self, value):
         """LD HL, SP + e8"""
         addr = helpers.signed_value(value)
-        self.R.HL = helpers.wrap_16bit(self.R.SP + addr)
+        calc = self.R.SP + addr
+        final = helpers.wrap_16bit(calc)
+        self.R.HL = final
+
+        self.R.ZERO = 0
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = (
+            ((self.R.SP & 0xF) + (addr & 0xF) > 0xF)
+            or ((self.R.SP & 0xF) + (addr & 0xF) < 0)
+        ) & 1
+        self.R.CARRY = ((self.R.SP & 0xFF) + (addr & 0xFF) > 0xFF) or (
+            (self.R.SP & 0xFF) + (addr & 0xFF) < 0
+        )
+
         return 12
 
     def LD_F9(self):
