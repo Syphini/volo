@@ -138,48 +138,53 @@ class PPU:
     def tick(self, cycles: int):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                # raise Exception('route to main dump')
                 self.mmu.dump()
                 pygame.quit()
                 print("Closed App")
                 sys.exit()
 
-        for _ in range(cycles):
-            match self._MODE:
-                case 2:  # OAM
-                    if self._CLOCK == 80:
-                        self._MODE = 3
-                        self._CLOCK = 0
-                case 3:  # Pixel
-                    if self._CLOCK == 172:
-                        self._MODE = 0
-                        self._CLOCK = 0
+        if self.LCDC.BIT_7 == 1:
+            for _ in range(cycles):
+                match self._MODE:
+                    case 2:  # OAM
+                        if self._CLOCK == 80:
+                            self._MODE = 3
+                            self._CLOCK = 0
+                    case 3:  # Pixel
+                        if self._CLOCK == 172:
+                            self._MODE = 0
+                            self._CLOCK = 0
 
-                        self.drawline()
-                case 0:  # H-Blank
-                    if self._CLOCK == 204:
-                        self._LY += 1
+                            self.drawline()
+                    case 0:  # H-Blank
+                        if self._CLOCK == 204:
+                            self._LY += 1
 
-                        if self._LY == 143:
-                            self._MODE = 1
-                        else:
-                            self._MODE = 2
-                        self._CLOCK = 0
-                case 1:  # V-Blank
-                    if self._CLOCK == 456:
-                        self._LY += 1
-                        self._CLOCK = 0
+                            if self._LY == 143:
+                                self.mmu.IO.IF.VBLANK = 1
+                                self._MODE = 1
+                            else:
+                                self._MODE = 2
+                            self._CLOCK = 0
+                    case 1:  # V-Blank
+                        if self._CLOCK == 456:
+                            self._LY += 1
+                            self._CLOCK = 0
 
-                        if self._LY > 153:
-                            self._MODE = 2
-                            self._LY = 0
+                            if self._LY > 153:
+                                self._MODE = 2
+                                self._LY = 0
 
-                            # region DEBUG
-                            newTime = time.time() * 1000
-                            print("Frame Drawn:", newTime - self._DEBUG_TIME)
-                            self._DEBUG_TIME = newTime
-                            # endregion
-
-            self._CLOCK += 1
+                                # region DEBUG
+                                newTime = time.time() * 1000
+                                print("Frame Drawn:", newTime - self._DEBUG_TIME)
+                                self._DEBUG_TIME = newTime
+                                # endregion
+                self._CLOCK += 1
+        else:
+            self._CLOCK = 0
+            self.clear_display()
 
     def get_tile_colour(self, tile_bytes: bytearray, tileX, tileY):
         """Convert byte data into tile data"""
@@ -195,6 +200,7 @@ class PPU:
         """Get tile given current pixel X & Y"""
         use_alt_block = self.LCDC.BIT_4 == 1
         use_alt_tilemap = self.LCDC.BIT_3 == 1
+
         vramTileBlock = 0x0000 if use_alt_block else 0x1000
         tileMap = 0x9C00 if use_alt_tilemap else 0x9800
 
@@ -234,7 +240,7 @@ class PPU:
     def clear_display(self):
         """Clear the canvas"""
         self.canvas.fill(
-            self.PALETTE[0], pygame.Rect(0, 0, self.CANVAS_SIZE[0], self.CANVAS_SIZE[1])
+            (255, 255, 255), pygame.Rect(0, 0, self.CANVAS_SIZE[0], self.CANVAS_SIZE[1])
         )
 
 

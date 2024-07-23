@@ -20,17 +20,21 @@ class Registers:
 
         self.ZERO = 1
         self.SUBTRACTION = 0
-        self.HALFCARRY = 1  # temp
-        self.CARRY = 1  # temp
+        self.HALFCARRY = 1
+        self.CARRY = 1
 
     @property
-    def AF(self):
-        return self.A << 8 | (
+    def F(self):
+        return (
             self.ZERO << 7
             | self.SUBTRACTION << 6
             | self.HALFCARRY << 5
             | self.CARRY << 4
         )
+
+    @property
+    def AF(self):
+        return self.A << 8 | self.F
 
     @AF.setter
     def AF(self, value: int):
@@ -118,10 +122,7 @@ class IO:
         self.JOYP = Joypad()  # FF00
         self.SB = 0x00  # FF01
         self.SC = 0x73  # FF02
-        self.DIV = 0xAB  # FF04
-        self.TIMA = 0x00  # FF05
-        self.TMA = 0x00  # FF06
-        self.TAC = 0xF8  # FF07
+        self._TIMER = Timer(self)  # FF04 -> FF07
         self.IF = Interrupts(0xE1)  # FF0F
         self.NR10 = 0x80  # FF10
         self.NR11 = 0xBF  # FF11
@@ -157,8 +158,7 @@ class IO:
                 print("TODO handle serial", helpers.formatted_hex(address))
                 return 0xFF
             case addr if 0xFF04 <= addr <= 0xFF07:
-                print("TODO handle timer registers", helpers.formatted_hex(address))
-                return 0xFF
+                return self._TIMER.get(addr)
             case 0xFF0F:
                 return self.IF.get()
             case addr if 0xFF10 <= addr <= 0xFF26:
@@ -179,7 +179,7 @@ class IO:
             case addr if 0xFF01 <= addr <= 0xFF02:
                 print("TODO handle serial", helpers.formatted_hex(address))
             case addr if 0xFF04 <= addr <= 0xFF07:
-                print("TODO handle timer registers", helpers.formatted_hex(address))
+                self._TIMER.set(addr, value)
             case 0xFF0F:
                 self.IF.set(value)
             case addr if 0xFF10 <= addr <= 0xFF26:
@@ -200,10 +200,10 @@ class IO:
                 self.SB,
                 self.SC,
                 0x00,
-                self.DIV,
-                self.TIMA,
-                self.TMA,
-                self.TAC,
+                self._TIMER.DIV,
+                self._TIMER.TIMA,
+                self._TIMER.TMA,
+                self._TIMER.TAC,
                 0x00,
                 0x00,
                 0x00,
@@ -260,6 +260,94 @@ class IO:
         return data
 
 
+class Timer:
+    def __init__(self, IO: IO):
+
+        self.IO = IO
+
+        self._DIVIDER = 0xAB00  # 16 bit register
+
+        # DIV - FF04
+
+        self.TIMA = 0x00  # FF05
+        self.TMA = 0x00  # FF06
+
+        self._TAC_ENABLE = 0
+        self._TAC_CLOCK_SELECT = 0
+
+        self.TAC = 0xF8  # FF07
+
+        self.CLOCK = 0
+
+    @property
+    def TAC(self):
+        return 0xF << 4 | 1 << 3 | self._TAC_ENABLE << 2 | self._TAC_CLOCK_SELECT
+
+    @TAC.setter
+    def TAC(self, value):
+        self._TAC_ENABLE = value >> 2
+        self._TAC_CLOCK_SELECT = value & 0x3
+        self.reset_clock()
+
+    @property
+    def DIV(self):
+        return self._DIVIDER >> 8
+
+    @DIV.setter
+    def DIV(self, _):
+        self._DIVIDER = 0x0
+
+    def get(self, address):
+        match address:
+            case 0xFF04:
+                return self.DIV
+            case 0xFF05:
+                return self.TIMA
+            case 0xFF06:
+                return self.TMA
+            case 0xFF07:
+                return self.TAC
+
+    def set(self, address, value):
+        match address:
+            case 0xFF04:
+                self.DIV = 0x0
+            case 0xFF05:
+                self.TIMA = value
+            case 0xFF06:
+                self.TMA = value
+            case 0xFF07:
+                self.TAC = value
+
+    def reset_clock(self):
+        match self._TAC_CLOCK_SELECT:
+            case 0:
+                self.CLOCK = 1024
+            case 1:
+                self.CLOCK = 16
+            case 2:
+                self.CLOCK = 64
+            case 3:
+                self.CLOCK = 256
+
+    def tick(self, cycles):
+        for _ in range(cycles):
+            self._DIVIDER = helpers.wrap_16bit(self._DIVIDER + 1)
+
+            if self._TAC_ENABLE == 1:
+                self.CLOCK -= 1
+
+                if self.CLOCK <= 0:
+                    self.reset_clock()
+                    calc = self.TIMA + 1
+                    if calc > 0xFF:
+                        self.IO.IF.TIMER = 1
+                        self.TIMA = self.TMA
+                        self.IO.IF.TIMER = 1
+                    else:
+                        self.TIMA = calc
+
+
 class Interrupts:
     def __init__(self, value=0x00):
         self.set(value)
@@ -273,6 +361,7 @@ class Interrupts:
 
     def get(self):
         return (
+            # 7 << 5 |
             self.JOYPAD << 4
             | self.SERIAL << 3
             | self.TIMER << 2

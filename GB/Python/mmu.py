@@ -17,6 +17,9 @@ class MMU:
         self.IO = io  # FF00 -> FF7F
         self.HRAM = bytearray(0x7F)  # FF80 -> FFFE
 
+        self.IME = False
+        self.HALT = False
+
     def get_memory(self, address):
         match address:
             case addr if 0x0000 <= addr <= 0x7FFF:

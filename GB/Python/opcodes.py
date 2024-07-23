@@ -1279,7 +1279,8 @@ class Opcodes:
         """JR NZ,e8"""
         if self.R.ZERO == 0:
             self.JR_18(value)
-        return 20
+            return 12
+        return 8
 
     def LD_21(self, value: int):
         """LD HL, n16"""
@@ -1339,7 +1340,8 @@ class Opcodes:
         """JR Z,e8"""
         if self.R.ZERO == 1:
             self.JR_18(value)
-        return 20
+            return 12
+        return 8
 
     def ADD_29(self):
         """ADD HL, HL"""
@@ -1389,7 +1391,8 @@ class Opcodes:
         """JR NC,e8"""
         if self.R.CARRY == 0:
             self.JR_18(value)
-        return 20
+            return 12
+        return 8
 
     def LD_31(self, value: int):
         """LD SP, n16"""
@@ -1447,7 +1450,8 @@ class Opcodes:
         """JR C, e8"""
         if self.R.CARRY == 1:
             self.JR_18(value)
-        return 20
+            return 12
+        return 8
 
     def ADD_39(self):
         """ADD HL, SP"""
@@ -1765,6 +1769,7 @@ class Opcodes:
 
     def HALT_76(self):
         """HALT"""
+        self.mmu.HALT = True
         return 4
 
     def LD_77(self):
@@ -2225,7 +2230,8 @@ class Opcodes:
         """RET NZ"""
         if self.R.ZERO == 0:
             self.JP_C3(self.R.POP())
-        return 28
+            return 20
+        return 8
 
     def POP_C1(self):
         """POP BC"""
@@ -2236,7 +2242,8 @@ class Opcodes:
         """JP NZ,n16"""
         if self.R.ZERO == 0:
             self.R.PC = address
-        return 30
+            return 16
+        return 12
 
     def JP_C3(self, address):
         """JP n16"""
@@ -2248,7 +2255,8 @@ class Opcodes:
         if self.R.ZERO == 0:
             self.R.PUSH(self.R.PC)
             self.JP_C3(value)
-        return 36
+            return 24
+        return 12
 
     def PUSH_C5(self):
         """PUSH BC"""
@@ -2269,7 +2277,8 @@ class Opcodes:
         """RET Z"""
         if self.R.ZERO == 1:
             self.JP_C3(self.R.POP())
-        return 28
+            return 20
+        return 8
 
     def RET_C9(self):
         """RET"""
@@ -2280,7 +2289,8 @@ class Opcodes:
         """JP Z,n16"""
         if self.R.ZERO == 1:
             self.R.PC = address
-        return 30
+            return 16
+        return 12
 
     def RLC_R8(self, value):
         initial = value
@@ -3671,13 +3681,14 @@ class Opcodes:
         if self.R.ZERO == 1:
             self.R.PUSH(self.R.PC)
             self.JP_C3(value)
-        return 36
+            return 24
+        return 12
 
-    def CALL_CD(self, value):
+    def CALL_CD(self, address):
         """CALL n16"""
         self.R.PUSH(self.R.PC)
         # NOTE: Must ensure PC is currently the address after CALL
-        self.JP_C3(value)
+        self.R.PC = address
         return 24
 
     def ADC_CE(self, value):
@@ -3694,7 +3705,8 @@ class Opcodes:
         """RET NC"""
         if self.R.CARRY == 0:
             self.JP_C3(self.R.POP())
-        return 28
+            return 20
+        return 8
 
     def POP_D1(self):
         """POP DE"""
@@ -3705,14 +3717,16 @@ class Opcodes:
         """JP NC,n16"""
         if self.R.CARRY == 0:
             self.R.PC = address
-        return 30
+            return 16
+        return 12
 
     def CALL_D4(self, value):
         """CALL NC,n16"""
         if self.R.CARRY == 0:
             self.R.PUSH(self.R.PC)
             self.JP_C3(value)
-        return 36
+            return 24
+        return 12
 
     def PUSH_D5(self):
         """PUSH DE"""
@@ -3733,7 +3747,8 @@ class Opcodes:
         """RET C"""
         if self.R.CARRY == 1:
             self.JP_C3(self.R.POP())
-        return 28
+            return 20
+        return 8
 
     def RETI_D9(self):
         """RETI"""
@@ -3745,14 +3760,16 @@ class Opcodes:
         """JP C, n16"""
         if self.R.CARRY == 1:
             self.R.PC = address
-        return 30
+            return 16
+        return 12
 
     def CALL_DC(self, value):
         """CALL C,n16"""
         if self.R.CARRY == 1:
             self.R.PUSH(self.R.PC)
             self.JP_C3(value)
-        return 36
+            return 24
+        return 12
 
     def SBC_DE(self, value):
         """SBC A, n8"""
@@ -3849,8 +3866,7 @@ class Opcodes:
 
     def DI_F3(self):
         """DI"""
-        global IME
-        IME = False
+        self.mmu.IME = False
         return 4
 
     def PUSH_F5(self):
@@ -3899,8 +3915,7 @@ class Opcodes:
 
     def EI_FB(self):
         """EI"""
-        global IME
-        IME = True
+        self.mmu.IME = True
         return 4
 
     def CP_FE(self, value):

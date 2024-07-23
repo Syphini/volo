@@ -25,10 +25,61 @@ with open(ROM_FILE, "rb") as f:
 # region CPU Logic
 try:
     while True:
+        # region Cartridge
+        # TODO CARTRIDGE HEADER
         if R.PC >= 0x104 and R.PC < 0x150:
-            # TODO CARTRIDGE HEADER
             R.INCREMENT_PC(1)
             continue
+        # endregion
+
+        # region Interrupts
+
+        if mmu.IME:
+            if mmu.IO.IF.VBLANK == 1 and mmu.IO.IE.VBLANK == 1:
+                mmu.IME = False
+                mmu.IO.IF.VBLANK = 0
+                opcodes.CALL_CD(0x40)
+                mmu.IO._TIMER.tick(20)
+                mmu.IO.LCD.tick(20)
+                mmu.HALT = False
+            elif mmu.IO.IF.LCD == 1 and mmu.IO.IE.LCD == 1:
+                mmu.IME = False
+                mmu.IO.IF.LCD = 0
+                opcodes.CALL_CD(0x48)
+                mmu.IO._TIMER.tick(20)
+                mmu.IO.LCD.tick(20)
+                mmu.HALT = False
+            elif mmu.IO.IF.TIMER == 1 and mmu.IO.IE.TIMER == 1:
+                mmu.IME = False
+                mmu.IO.IF.TIMER = 0
+                opcodes.CALL_CD(0x50)
+                mmu.IO._TIMER.tick(20)
+                mmu.IO.LCD.tick(20)
+                mmu.HALT = False
+            elif mmu.IO.IF.SERIAL == 1 and mmu.IO.IE.SERIAL == 1:
+                mmu.IME = False
+                mmu.IO.IF.SERIAL = 0
+                opcodes.CALL_CD(0x58)
+                mmu.IO._TIMER.tick(20)
+                mmu.IO.LCD.tick(20)
+                mmu.HALT = False
+            elif mmu.IO.IF.JOYPAD == 1 and mmu.IO.IE.JOYPAD == 1:
+                mmu.IME = False
+                mmu.IO.IF.JOYPAD = 0
+                opcodes.CALL_CD(0x60)
+                mmu.IO._TIMER.tick(20)
+                mmu.IO.LCD.tick(20)
+                mmu.HALT = False
+
+        # endregion
+
+        if mmu.HALT:
+            if mmu.IO.IF.get() & mmu.IO.IE.get() == 0:
+                mmu.IO._TIMER.tick(4)
+                mmu.IO.LCD.tick(4)
+                continue
+            else:
+                mmu.HALT = False
 
         PC_DATA = mmu.get_memory(R.PC)
 
@@ -48,7 +99,9 @@ try:
         # endregion
 
         cycles = opcodes.execute(PC_DATA, CB_FLAG)
+        mmu.IO._TIMER.tick(cycles)
         mmu.IO.LCD.tick(cycles)
+
 
 # endregion
 
