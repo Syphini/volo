@@ -78,8 +78,8 @@ class MMU:
                 + self.VRAM
                 + self.ERAM
                 + self.WRAM
-                + self.OAM
                 + self.ECHO
+                + self.OAM
                 + self.EMPTY
                 + self.IO.dump()
                 + self.HRAM

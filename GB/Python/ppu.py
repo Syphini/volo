@@ -14,7 +14,7 @@ class PPU:
         self.SCX = 0x00  # FF43
         self._LY = 0x00  # FF44 -- read-only
         self.LYC = 0x00  # FF45
-        self.DMA = 0x00  # FF46
+        # DMA  # FF46
         self.BGP = 0xFC  # FF47
         self.OBP0 = 0x00  # FF48
         self.OBP1 = 0x00  # FF49
@@ -35,6 +35,16 @@ class PPU:
         ]
 
         self.init_pygame()
+
+    @property
+    def DMA(self):
+        return 0x0
+
+    @DMA.setter
+    def DMA(self, value):
+        for i in range(0xA0):
+            source_mem = self.mmu.get_memory(value << 8 | i)
+            self.mmu.set_memory(0xFE00 + i, source_mem)
 
     def init_pygame(self):
         self.PIXEL_SIZE = 2
