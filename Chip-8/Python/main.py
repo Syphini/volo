@@ -283,7 +283,6 @@ keycodes = {
 }
 
 clock = time.time()
-beep = pygame.mixer.Sound('Chip-8/beep.ogg')
 while True:
     curr = time.time()
     if (curr > clock + 1/60):
@@ -306,7 +305,7 @@ while True:
 
     if (sound_timer > 0):
         #TODO find a way to play a static long sound rather than a clip that can "end"
-        beep.play()
+        pass
 
     # Operation
     data = fetch()
