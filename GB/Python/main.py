@@ -1,4 +1,6 @@
 import traceback
+import sys
+import pygame
 import helpers
 from mmu import MMU
 from registers import Registers
@@ -22,6 +24,27 @@ with open(ROM_FILE, "rb") as f:
     for cycle_count, b in enumerate(f.read()):
         mmu.set_memory(cycle_count, b)
 
+
+def handle_events():
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            dump()
+            pygame.quit()
+            print("Closed App")
+            sys.exit()
+        mmu.IO.JOYP.handle_event(event)
+
+
+def dump(exception=None):
+    print("------")
+    R.debug()
+    print("------")
+    if exception:
+        traceback.print_exception(exception)
+    mmu.dump()
+    print("Exiting...")
+
+
 # region CPU Logic
 try:
     while True:
@@ -31,6 +54,8 @@ try:
             R.INCREMENT_PC(1)
             continue
         # endregion
+
+        handle_events()
 
         # region Interrupts
 
@@ -99,16 +124,10 @@ try:
         # endregion
 
         cycles = opcodes.execute(PC_DATA, CB_FLAG)
-        mmu.IO._TIMER.tick(cycles)
-        mmu.IO.LCD.tick(cycles)
+        mmu.IO.tick(cycles)
 
 
 # endregion
 
 except Exception as e:
-    print("------")
-    R.debug()
-    print("------")
-    traceback.print_exception(e)
-    mmu.dump()
-    print("Exiting...")
+    dump(e)

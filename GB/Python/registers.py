@@ -1,3 +1,4 @@
+import pygame
 import helpers
 from ppu import PPU
 
@@ -119,7 +120,7 @@ class Registers:
 
 class IO:
     def __init__(self, mmu):
-        self.JOYP = Joypad()  # FF00
+        self.JOYP = Joypad(self)  # FF00
         self.SB = 0x00  # FF01
         self.SC = 0x73  # FF02
         self._TIMER = Timer(self)  # FF04 -> FF07
@@ -192,6 +193,10 @@ class IO:
                 print(
                     f"Ignoring IO Address SET: {helpers.formatted_hex(address)} {helpers.formatted_hex(value)}"
                 )
+
+    def tick(self, cycles):
+        self._TIMER.tick(cycles)
+        self.LCD.tick(cycles)
 
     def dump(self):
         data = bytearray(
@@ -373,10 +378,16 @@ class Interrupts:
 class Joypad:
     # 0xCF -> 11001111
     # 0 is True, 1 is False
-    def __init__(self):
+    def __init__(self, IO: IO):
+
+        self.IO = IO
+
         self.USE_SELECT = True
         self.USE_DPAD = True
 
+        self.reset_keys()
+
+    def reset_keys(self):
         # SsBA
         self.START = False
         self.SELECT = False
@@ -393,12 +404,38 @@ class Joypad:
         return (
             self.USE_SELECT << 5
             | self.USE_DPAD << 4
-            | ((not self.START) or (not self.DOWN)) << 3
-            | ((not self.SELECT) or (not self.UP)) << 2
-            | ((not self.B) or (not self.LEFT)) << 1
-            | ((not self.A) or (not self.RIGHT))
+            | (not (self.START | self.DOWN) & 1) << 3
+            | (not (self.SELECT | self.UP) & 1) << 2
+            | (not (self.B | self.LEFT) & 1) << 1
+            | (not (self.A | self.RIGHT) & 1)
         )
 
     def set(self, value):
         self.USE_SELECT = not (value >> 5 & 1)
         self.USE_DPAD = not (value >> 4 & 1)
+
+    def set_keys(self, scancode, value):
+        match scancode:
+            case pygame.KSCAN_DOWN:
+                self.DOWN = value
+            case pygame.KSCAN_UP:
+                self.UP = value
+            case pygame.KSCAN_LEFT:
+                self.LEFT = value
+            case pygame.KSCAN_RIGHT:
+                self.RIGHT = value
+            case pygame.KSCAN_RETURN:
+                self.START = value
+            case pygame.KSCAN_LSHIFT:
+                self.SELECT = value
+            case pygame.KSCAN_A:
+                self.B = value
+            case pygame.KSCAN_S:
+                self.A = value
+
+    def handle_event(self, event):
+        if event.type == pygame.KEYDOWN:
+            self.set_keys(event.scancode, True)
+            self.IO.IF.JOYPAD = 1
+        if event.type == pygame.KEYUP:
+            self.set_keys(event.scancode, False)

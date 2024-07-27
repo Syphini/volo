@@ -1,5 +1,4 @@
 import time
-import sys
 import pygame
 import helpers
 
@@ -24,6 +23,8 @@ class PPU:
         self._MODE = 2
         self._LX = 0x0
         self._CLOCK = 0
+
+        self._OAM_OFFSET = 0xFE00
 
         self._DEBUG_TIME = time.time() * 1000
 
@@ -146,14 +147,6 @@ class PPU:
     # Tilemap 2 9C00 -> 9FFF
 
     def tick(self, cycles: int):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                # raise Exception('route to main dump')
-                self.mmu.dump()
-                pygame.quit()
-                print("Closed App")
-                sys.exit()
-
         if self.LCDC.BIT_7 == 1:
             for _ in range(cycles):
                 match self._MODE:
@@ -167,6 +160,8 @@ class PPU:
                             self._CLOCK = 0
 
                             self.drawline()
+                            self.draw_oam_line()
+                            pygame.display.flip()
                     case 0:  # H-Blank
                         if self._CLOCK == 204:
                             self._LY += 1
@@ -196,17 +191,38 @@ class PPU:
             self._CLOCK = 0
             self.clear_display()
 
-    def get_tile_colour(self, tile_bytes: bytearray, tileX, tileY):
+    def get_tile_colour(
+        self, tile_bytes: bytearray, tileX, tileY, attributes: int = None
+    ):
         """Convert byte data into tile data"""
         if len(tile_bytes) < 16:
             raise Exception("Invalid Tile Data")
 
-        B1 = tile_bytes[tileY] >> 7 - tileX & 1
-        B2 = tile_bytes[tileY + 1] >> 7 - tileX & 1
+        # priority = 0
+        yFlip = 0
+        xFlip = 0
+
+        tileY *= 2
+
+        if attributes:
+            # priority = attributes >> 7 & 1
+            yFlip = attributes >> 6 & 1
+            xFlip = attributes >> 5 & 1
+
+        B1 = (
+            tile_bytes[15 - tileY if yFlip else tileY]
+            >> (tileX if xFlip else (7 - tileX))
+            & 1
+        )
+        B2 = (
+            tile_bytes[15 - (tileY + 1) if yFlip else (tileY + 1)]
+            >> (tileX if xFlip else (7 - tileX))
+            & 1
+        )
 
         return B2 << 1 | B1
 
-    def get_tile(self, x, y):
+    def get_bg_tile(self, x, y):
         """Get tile given current pixel X & Y"""
         use_alt_block = self.LCDC.BIT_4 == 1
         use_alt_tilemap = self.LCDC.BIT_3 == 1
@@ -221,8 +237,42 @@ class PPU:
         # TODO change this to get_memory
         return self.mmu.VRAM[vramTileBlock + offset : vramTileBlock + offset + 16]
 
-    def draw_pixel(self, x, y, colourId):
+    def draw_oam_line(self):
+        line = helpers.wrap_8bit(self._LY + self.SCY)
+
+        sprite_height = 8
+        sprite_count = 0
+        sprites_list = []
+
+        # find sprites on this line
+        for i in range(0, 0xA0, 4):
+            y = self.mmu.get_memory(self._OAM_OFFSET + i) - 16
+
+            if y <= line < y + sprite_height:
+                sprites_list.append(i)
+                sprite_count += 1
+                if sprite_count == 10:
+                    break
+
+        # render the sprites onto the line
+        for i in range(sprite_count):
+            spriteIndex = sprites_list[i]
+            y = self.mmu.get_memory(self._OAM_OFFSET + spriteIndex) - 16
+            x = self.mmu.get_memory(self._OAM_OFFSET + spriteIndex + 1) - 8
+            tileIndex = self.mmu.get_memory(self._OAM_OFFSET + spriteIndex + 2) * 16
+            attributes = self.mmu.get_memory(self._OAM_OFFSET + spriteIndex + 3)
+
+            tile = self.mmu.VRAM[tileIndex : tileIndex + 16]
+
+            for lineX in range(8):
+                colour = self.get_tile_colour(tile, lineX, line % 8, attributes)
+                self.draw_pixel(x + lineX, line, colour, True)
+
+    def draw_pixel(self, x, y, colourId, transparent=False):
         """Draw pixel at (x,y)"""
+        if transparent and colourId == 0:
+            return
+
         self.canvas.fill(
             self.PALETTE[colourId],
             pygame.Rect(
@@ -238,14 +288,12 @@ class PPU:
         # TODO make faster
         # aim:(<40ms/24fps) current:(~70ms/14fps)
         y = self._LY
+        scrollY = helpers.wrap_8bit(y + self.SCY)
 
         for x in range(self.SCREEN_X):
-            tile = self.get_tile(
-                helpers.wrap_8bit(x + self.SCX), helpers.wrap_8bit(y + self.SCY)
-            )  # ~10ms
-            colour = self.get_tile_colour(tile, x % 8, (y % 8) * 2)  # ~5ms
+            tile = self.get_bg_tile(helpers.wrap_8bit(x + self.SCX), scrollY)  # ~10ms
+            colour = self.get_tile_colour(tile, x % 8, y % 8)  # ~5ms
             self.draw_pixel(x, y, colour)  # ~20ms
-        pygame.display.flip()  # ~10ms
 
     def clear_display(self):
         """Clear the canvas"""
