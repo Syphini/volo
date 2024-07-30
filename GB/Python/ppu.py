@@ -1,4 +1,3 @@
-import time
 import pygame
 import helpers
 
@@ -25,8 +24,6 @@ class PPU:
         self._CLOCK = 0
 
         self._OAM_OFFSET = 0xFE00
-
-        self._DEBUG_TIME = time.time() * 1000
 
         self.PALETTE = [
             (255, 246, 211),
@@ -180,12 +177,6 @@ class PPU:
                             if self._LY > 153:
                                 self._MODE = 2
                                 self._LY = 0
-
-                                # region DEBUG
-                                newTime = time.time() * 1000
-                                print("Frame Drawn:", newTime - self._DEBUG_TIME)
-                                self._DEBUG_TIME = newTime
-                                # endregion
                 self._CLOCK += 1
         else:
             self._CLOCK = 0
@@ -286,13 +277,14 @@ class PPU:
     def drawline(self):
         """Draw the current scanline"""
         # TODO make faster
-        # aim:(<40ms/24fps) current:(~70ms/14fps)
+        # aim: 40ms, current: 80ms
+        # per 20 cycles @ 10000 ticks
         y = self._LY
         scrollY = helpers.wrap_8bit(y + self.SCY)
 
         for x in range(self.SCREEN_X):
-            tile = self.get_bg_tile(helpers.wrap_8bit(x + self.SCX), scrollY)  # ~10ms
-            colour = self.get_tile_colour(tile, x % 8, y % 8)  # ~5ms
+            tile = self.get_bg_tile(helpers.wrap_8bit(x + self.SCX), scrollY)  # ~30ms
+            colour = self.get_tile_colour(tile, x % 8, y % 8)  # ~20ms
             self.draw_pixel(x, y, colour)  # ~20ms
 
     def clear_display(self):

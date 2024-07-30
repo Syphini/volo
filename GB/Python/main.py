@@ -1,6 +1,8 @@
+import time
 import traceback
 import sys
 import pygame
+from cartridge import Cartridge
 import helpers
 from mmu import MMU
 from registers import Registers
@@ -8,21 +10,19 @@ from opcodes import Opcodes
 
 print()
 
-DEBUG = False
+OP_DEBUG = False
+TIME_DEBUG = True
 
 ROM_FILE = "GB/ROM/DMG_ROM.bin"
 
 # region Registers
 
-mmu = MMU()
+cartridge = Cartridge(ROM_FILE)
+mmu = MMU(cartridge, use_boot_rom=False)
 R = Registers(mmu)
 opcodes = Opcodes(mmu, R)
 
 # endregion
-
-with open(ROM_FILE, "rb") as f:
-    for cycle_count, b in enumerate(f.read()):
-        mmu.set_memory(cycle_count, b)
 
 
 def handle_events():
@@ -45,16 +45,13 @@ def dump(exception=None):
     print("Exiting...")
 
 
+count = 0
+lastTime = time.time() * 1000
+
 # region CPU Logic
 try:
     while True:
-        # region Cartridge
-        # TODO CARTRIDGE HEADER
-        if R.PC >= 0x104 and R.PC < 0x150:
-            R.INCREMENT_PC(1)
-            continue
-        # endregion
-
+        count += 1
         handle_events()
 
         # region Interrupts
@@ -115,7 +112,7 @@ try:
             R.INCREMENT_PC(1)
 
         # region DEBUG
-        if DEBUG:
+        if OP_DEBUG:
             print(
                 helpers.formatted_hex(R.PC),
                 helpers.formatted_hex(PC_DATA + 0xCB00 if CB_FLAG else PC_DATA),
@@ -125,6 +122,13 @@ try:
 
         cycles = opcodes.execute(PC_DATA, CB_FLAG)
         mmu.IO.tick(cycles)
+
+        if count == 10000:
+            count = 0
+            if TIME_DEBUG:
+                newTime = time.time() * 1000
+                print("Cycle Time:", newTime - lastTime)
+                lastTime = newTime
 
 
 # endregion

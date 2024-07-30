@@ -1,13 +1,22 @@
+import os
 import helpers
+from cartridge import Cartridge
 from registers import IO
 
 
 class MMU:
-    def __init__(self):
+    def __init__(self, cartridge: Cartridge, use_boot_rom=False):
 
         io = IO(self)
 
-        self.RAM = bytearray(0x8000)  # 0000 -> 7FFF
+        self.BOOT_ROM = "/lib/DMG_ROM.bin"
+        self.CARTRIDGE = cartridge
+
+        # ROM Memory is cartridge memory, and is therefore readonly unless there's an MBC chip
+        self.ROM1 = bytearray(0x4000)  # 0000 -> 3FFF
+        self.ROM2 = bytearray(0x4000)  # 4000 -> 7FFF
+
+        # This memory is GB internal
         self.VRAM = bytearray(0x2000)  # 8000 -> 9FFF
         self.ERAM = bytearray(0x2000)  # A000 -> BFFF
         self.WRAM = bytearray(0x2000)  # C000 -> DFFF
@@ -20,10 +29,32 @@ class MMU:
         self.IME = False
         self.HALT = False
 
+        self.switch_bank(0)
+        # TODO map boot rom over the top of BANK 0
+
+        if use_boot_rom:
+            with open(
+                os.path.dirname(os.path.abspath(__file__)) + self.BOOT_ROM, "rb"
+            ) as f:
+                self.ROM1[0:0x100] = f.read()
+
+        self.switch_bank(1)
+
+        print(self.CARTRIDGE.HEADER.title)
+
+    def switch_bank(self, bank):
+        match bank:
+            case 0:
+                self.ROM1 = self.CARTRIDGE.MEMORY_BANKS[0]
+            case _:
+                self.ROM2 = self.CARTRIDGE.MEMORY_BANKS[bank]
+
     def get_memory(self, address):
         match address:
-            case addr if 0x0000 <= addr <= 0x7FFF:
-                return self.RAM[address]
+            case addr if 0x0000 <= addr <= 0x3FFF:
+                return self.ROM1[address]
+            case addr if 0x4000 <= addr <= 0x7FFF:
+                return self.ROM2[address - 0x4000]
             case addr if 0x8000 <= addr <= 0x9FFF:
                 return self.VRAM[address - 0x8000]
             case addr if 0xA000 <= addr <= 0xBFFF:
@@ -48,7 +79,8 @@ class MMU:
     def set_memory(self, address, value):
         match address:
             case addr if 0x0000 <= addr <= 0x7FFF:
-                self.RAM[address] = value
+                # TODO handle ROM Banking
+                pass
             case addr if 0x8000 <= addr <= 0x9FFF:
                 self.VRAM[address - 0x8000] = value
             case addr if 0xA000 <= addr <= 0xBFFF:
@@ -74,7 +106,8 @@ class MMU:
         # Hex Dump
         with open("GB\ROM\dump.md", "w") as f:
             dump = bytearray.hex(
-                self.RAM
+                self.ROM1
+                + self.ROM2
                 + self.VRAM
                 + self.ERAM
                 + self.WRAM
