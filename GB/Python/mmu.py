@@ -11,6 +11,7 @@ class MMU:
 
         self.BOOT_ROM = "/lib/DMG_ROM.bin"
         self.CARTRIDGE = cartridge
+        self.USE_BOOT_ROM = use_boot_rom
 
         # ROM Memory is cartridge memory, and is therefore readonly unless there's an MBC chip
         self.ROM1 = bytearray(0x4000)  # 0000 -> 3FFF
@@ -32,7 +33,7 @@ class MMU:
         self.switch_bank(0)
         # TODO map boot rom over the top of BANK 0
 
-        if use_boot_rom:
+        if self.USE_BOOT_ROM:
             with open(
                 os.path.dirname(os.path.abspath(__file__)) + self.BOOT_ROM, "rb"
             ) as f:

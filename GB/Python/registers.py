@@ -16,7 +16,9 @@ class Registers:
         self.H = 0x01
         self.L = 0x4D
 
-        self.PC = 0x0  # Boot ROM is 0x0; Cartridge is 0x100
+        self.PC = (
+            0x0 if mmu.USE_BOOT_ROM else 0x100
+        )  # Boot ROM is 0x0; Cartridge is 0x100
         self.SP = 0xFFFE
 
         self.ZERO = 1

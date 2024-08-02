@@ -225,7 +225,7 @@ class PPU:
         offset = (
             tileIndex if use_alt_block == 1 else helpers.signed_value(tileIndex)
         ) * 16
-        # TODO change this to get_memory
+
         return self.mmu.VRAM[vramTileBlock + offset : vramTileBlock + offset + 16]
 
     def draw_oam_line(self):
@@ -283,8 +283,9 @@ class PPU:
         scrollY = helpers.wrap_8bit(y + self.SCY)
 
         for x in range(self.SCREEN_X):
-            tile = self.get_bg_tile(helpers.wrap_8bit(x + self.SCX), scrollY)  # ~30ms
-            colour = self.get_tile_colour(tile, x % 8, y % 8)  # ~20ms
+            scrollX = helpers.wrap_8bit(x + self.SCX)
+            tile = self.get_bg_tile(scrollX, scrollY)  # ~30ms
+            colour = self.get_tile_colour(tile, scrollX % 8, scrollY % 8)  # ~20ms
             self.draw_pixel(x, y, colour)  # ~20ms
 
     def clear_display(self):

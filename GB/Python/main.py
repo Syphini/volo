@@ -13,12 +13,12 @@ print()
 OP_DEBUG = False
 TIME_DEBUG = True
 
-ROM_FILE = "GB/ROM/DMG_ROM.bin"
+ROM_FILE = "GB/ROM/cpu_instrs.gb"
 
 # region Registers
 
 cartridge = Cartridge(ROM_FILE)
-mmu = MMU(cartridge, use_boot_rom=False)
+mmu = MMU(cartridge, use_boot_rom=True)
 R = Registers(mmu)
 opcodes = Opcodes(mmu, R)
 
