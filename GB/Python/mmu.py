@@ -7,11 +7,12 @@ from registers import IO
 class MMU:
     def __init__(self, cartridge: Cartridge, use_boot_rom=False):
 
-        io = IO(self)
-
         self.BOOT_ROM = "/lib/DMG_ROM.bin"
         self.CARTRIDGE = cartridge
+        self.CURRENT_BANK = None
         self.USE_BOOT_ROM = use_boot_rom
+
+        io = IO(self)
 
         # ROM Memory is cartridge memory, and is therefore readonly unless there's an MBC chip
         self.ROM1 = bytearray(0x4000)  # 0000 -> 3FFF
@@ -30,25 +31,30 @@ class MMU:
         self.IME = False
         self.HALT = False
 
-        self.switch_bank(0)
-        # TODO map boot rom over the top of BANK 0
+        self.switch_rom_bank(0)
 
-        if self.USE_BOOT_ROM:
+        if self.USE_BOOT_ROM and self.IO.BANK == 0:
             with open(
                 os.path.dirname(os.path.abspath(__file__)) + self.BOOT_ROM, "rb"
             ) as f:
                 self.ROM1[0:0x100] = f.read()
 
-        self.switch_bank(1)
+        self.switch_rom_bank(1)
 
         print(self.CARTRIDGE.HEADER.title)
 
-    def switch_bank(self, bank):
+    def switch_rom_bank(self, bank):
         match bank:
             case 0:
-                self.ROM1 = self.CARTRIDGE.MEMORY_BANKS[0]
+                bank_data = self.CARTRIDGE.MEMORY_BANKS[0].copy()
+                self.ROM1 = bank_data
             case _:
-                self.ROM2 = self.CARTRIDGE.MEMORY_BANKS[bank]
+                self.CURRENT_BANK = bank
+                bank_data = self.CARTRIDGE.MEMORY_BANKS[bank].copy()
+                self.ROM2 = bank_data
+
+    def switch_ram_bank(self, bank):
+        pass
 
     def get_memory(self, address):
         match address:
@@ -79,8 +85,15 @@ class MMU:
 
     def set_memory(self, address, value):
         match address:
-            case addr if 0x0000 <= addr <= 0x7FFF:
-                # TODO handle ROM Banking
+            case addr if 0x0000 <= addr <= 0x1FFF:
+                self.CARTRIDGE.toggle_ram_enable(value)
+            case addr if 0x2000 <= addr <= 0x3FFF:
+                self.switch_rom_bank((value & 0x1F) & (self.CARTRIDGE.MBC_COUNT - 1))
+            case addr if 0x4000 <= addr <= 0x5FFF:
+                print("TODO RAM Bank Number")
+                pass
+            case addr if 0x6000 <= addr <= 0x7FFF:
+                print("TODO Banking Mode Select")
                 pass
             case addr if 0x8000 <= addr <= 0x9FFF:
                 self.VRAM[address - 0x8000] = value

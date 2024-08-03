@@ -13,11 +13,11 @@ class Opcodes:
             bytes([self.mmu.get_memory(self.R.PC + i) for i in range(count)]),
             "little",
         )
-        self.R.INCREMENT_PC(count)
+        self.R.PC += count
         return data
 
     def execute(self, opcode, use_cb):
-        self.R.INCREMENT_PC(1)
+        self.R.PC += 1
 
         if use_cb:
             match opcode:
@@ -41,6 +41,8 @@ class Opcodes:
                     return self.RRC_CB08()
                 case 0x09:
                     return self.RRC_CB09()
+                case 0x10:
+                    return self.STOP_10()
                 case 0x0A:
                     return self.RRC_CB0A()
                 case 0x0B:
@@ -1072,36 +1074,29 @@ class Opcodes:
 
     def INC_03(self):
         """INC BC"""
-        self.R.BC = helpers.wrap_16bit(self.R.BC + 1)
+        self.R.BC = (self.R.BC + 1) & 0xFFFF
         return 8
-
-    def INC_R8(self, register):
-        initial = register
-        calc = initial + 1
-        final = helpers.wrap_8bit(calc)
-        self.R.ZERO = (final == 0) & 1
-        self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = ((initial & 0xF) + 1 > 0xF) & 1
-
-        return final
 
     def INC_04(self):
         """INC B"""
-        self.R.B = self.INC_R8(self.R.B)
-        return 4
+        calc = self.R.B + 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((self.R.B & 0xF) + 1 > 0xF) & 1
+        calc &= 0xFF
 
-    def DEC_R8(self, register):
-        initial = register
-        calc = initial - 1
-        final = helpers.wrap_8bit(calc)
-        self.R.ZERO = (final == 0) & 1
-        self.R.SUBTRACTION = 1
-        self.R.HALFCARRY = ((initial & 0xF) - 1 < 0) & 1
-        return final
+        self.R.B = calc
+        return 4
 
     def DEC_05(self):
         """DEC B"""
-        self.R.B = self.DEC_R8(self.R.B)
+        calc = self.R.B - 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.B & 0xF) - 1 < 0) & 1
+        calc &= 0xFF
+
+        self.R.B = calc
         return 4
 
     def LD_06(self, value):
@@ -1136,8 +1131,12 @@ class Opcodes:
         self.R.HALFCARRY = ((self.R.HL & 0xFFF) + (self.R.BC & 0xFFF) > 0xFFF) & 1
         self.R.CARRY = (calc > 0xFFFF) & 1
 
-        self.R.HL = helpers.wrap_16bit(calc)
+        self.R.HL = calc & 0xFFFF
         return 8
+
+    def STOP_10(self):
+        """STOP 0"""
+        return 4
 
     def LD_0A(self):
         """LD A, [BC]"""
@@ -1146,17 +1145,29 @@ class Opcodes:
 
     def DEC_0B(self):
         """DEC BC"""
-        self.R.BC = helpers.wrap_16bit(self.R.BC - 1)
+        self.R.BC = (self.R.BC - 1) & 0xFFFF
         return 8
 
     def INC_0C(self):
         """INC C"""
-        self.R.C = self.INC_R8(self.R.C)
+        calc = self.R.C + 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((self.R.C & 0xF) + 1 > 0xF) & 1
+        calc &= 0xFF
+
+        self.R.C = calc
         return 4
 
     def DEC_0D(self):
         """DEC C"""
-        self.R.C = self.DEC_R8(self.R.C)
+        calc = self.R.C - 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.C & 0xF) - 1 < 0) & 1
+        calc &= 0xFF
+
+        self.R.C = calc
         return 4
 
     def LD_0E(self, value):
@@ -1189,17 +1200,29 @@ class Opcodes:
 
     def INC_13(self):
         """INC DE"""
-        self.R.DE = helpers.wrap_16bit(self.R.DE + 1)
+        self.R.DE = (self.R.DE + 1) & 0xFFFF
         return 8
 
     def INC_14(self):
         """INC D"""
-        self.R.D = self.INC_R8(self.R.D)
+        calc = self.R.D + 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((self.R.D & 0xF) + 1 > 0xF) & 1
+        calc &= 0xFF
+
+        self.R.D = calc
         return 4
 
     def DEC_15(self):
         """DEC D"""
-        self.R.D = self.DEC_R8(self.R.D)
+        calc = self.R.D - 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.D & 0xF) - 1 < 0) & 1
+        calc &= 0xFF
+
+        self.R.D = calc
         return 4
 
     def LD_16(self, value):
@@ -1222,8 +1245,8 @@ class Opcodes:
 
     def JR_18(self, value):
         """JR e8"""
-        addr = helpers.signed_value(value)
-        self.R.INCREMENT_PC(addr)
+        addr = (value ^ 0x80) - 0x80
+        self.R.PC += addr
         return 12
 
     def ADD_19(self):
@@ -1234,7 +1257,7 @@ class Opcodes:
         self.R.HALFCARRY = ((self.R.HL & 0xFFF) + (self.R.DE & 0xFFF) > 0xFFF) & 1
         self.R.CARRY = (calc > 0xFFFF) & 1
 
-        self.R.HL = helpers.wrap_16bit(calc)
+        self.R.HL = calc & 0xFFFF
         return 8
 
     def LD_1A(self):
@@ -1244,17 +1267,29 @@ class Opcodes:
 
     def DEC_1B(self):
         """DEC DE"""
-        self.R.DE = helpers.wrap_16bit(self.R.DE - 1)
+        self.R.DE = (self.R.DE - 1) & 0xFFFF
         return 8
 
     def INC_1C(self):
         """INC E"""
-        self.R.E = self.INC_R8(self.R.E)
+        calc = self.R.E + 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((self.R.E & 0xF) + 1 > 0xF) & 1
+        calc &= 0xFF
+
+        self.R.E = calc
         return 4
 
     def DEC_1D(self):
         """DEC E"""
-        self.R.E = self.DEC_R8(self.R.E)
+        calc = self.R.E - 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.E & 0xF) - 1 < 0) & 1
+        calc &= 0xFF
+
+        self.R.E = calc
         return 4
 
     def LD_1E(self, value):
@@ -1278,7 +1313,8 @@ class Opcodes:
     def JR_20(self, value):
         """JR NZ,e8"""
         if self.R.ZERO == 0:
-            self.JR_18(value)
+            addr = (value ^ 0x80) - 0x80
+            self.R.PC += addr
             return 12
         return 8
 
@@ -1290,22 +1326,34 @@ class Opcodes:
     def LD_22(self):
         """LD [HLI],A"""
         self.mmu.set_memory(self.R.HL, self.R.A)
-        self.R.HL = helpers.wrap_16bit(self.R.HL + 1)
+        self.R.HL = (self.R.HL + 1) & 0xFFFF
         return 8
 
     def INC_23(self):
         """INC HL"""
-        self.R.HL = helpers.wrap_16bit(self.R.HL + 1)
+        self.R.HL = (self.R.HL + 1) & 0xFFFF
         return 8
 
     def INC_24(self):
         """INC H"""
-        self.R.H = self.INC_R8(self.R.H)
+        calc = self.R.H + 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((self.R.H & 0xF) + 1 > 0xF) & 1
+        calc &= 0xFF
+
+        self.R.H = calc
         return 4
 
     def DEC_25(self):
         """DEC H"""
-        self.R.H = self.DEC_R8(self.R.H)
+        calc = self.R.H - 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.H & 0xF) - 1 < 0) & 1
+        calc &= 0xFF
+
+        self.R.H = calc
         return 4
 
     def LD_26(self, value):
@@ -1326,9 +1374,9 @@ class Opcodes:
             carryBit = 1
 
         final = (
-            helpers.wrap_8bit(self.R.A + offset)
+            (self.R.A + offset) & 0xFF
             if self.R.SUBTRACTION == 0
-            else helpers.wrap_8bit(self.R.A - offset)
+            else (self.R.A - offset) & 0xFF
         )
         self.R.A = final
         self.R.ZERO = (final == 0) & 1
@@ -1339,7 +1387,8 @@ class Opcodes:
     def JR_28(self, value):
         """JR Z,e8"""
         if self.R.ZERO == 1:
-            self.JR_18(value)
+            addr = (value ^ 0x80) - 0x80
+            self.R.PC += addr
             return 12
         return 8
 
@@ -1351,28 +1400,40 @@ class Opcodes:
         self.R.HALFCARRY = ((self.R.HL & 0xFFF) + (self.R.HL & 0xFFF) > 0xFFF) & 1
         self.R.CARRY = (calc > 0xFFFF) & 1
 
-        self.R.HL = helpers.wrap_16bit(calc)
+        self.R.HL = calc & 0xFFFF
         return 8
 
     def LD_2A(self):
         """LD A, [HLI]"""
         self.R.A = self.mmu.get_memory(self.R.HL)
-        self.R.HL = helpers.wrap_16bit(self.R.HL + 1)
+        self.R.HL = (self.R.HL + 1) & 0xFFFF
         return 8
 
     def DEC_2B(self):
         """DEC HL"""
-        self.R.HL = helpers.wrap_16bit(self.R.HL - 1)
+        self.R.HL = (self.R.HL - 1) & 0xFFFF
         return 8
 
     def INC_2C(self):
         """INC L"""
-        self.R.L = self.INC_R8(self.R.L)
+        calc = self.R.L + 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((self.R.L & 0xF) + 1 > 0xF) & 1
+        calc &= 0xFF
+
+        self.R.L = calc
         return 4
 
     def DEC_2D(self):
         """DEC L"""
-        self.R.L = self.DEC_R8(self.R.L)
+        calc = self.R.L - 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.L & 0xF) - 1 < 0) & 1
+        calc &= 0xFF
+
+        self.R.L = calc
         return 4
 
     def LD_2E(self, value):
@@ -1390,7 +1451,8 @@ class Opcodes:
     def JR_30(self, value):
         """JR NC,e8"""
         if self.R.CARRY == 0:
-            self.JR_18(value)
+            addr = (value ^ 0x80) - 0x80
+            self.R.PC += addr
             return 12
         return 8
 
@@ -1402,18 +1464,18 @@ class Opcodes:
     def LD_32(self):
         """LD [HLD],A"""
         self.mmu.set_memory(self.R.HL, self.R.A)
-        self.R.HL = helpers.wrap_16bit(self.R.HL - 1)
+        self.R.HL = (self.R.HL - 1) & 0xFFFF
         return 8
 
     def INC_33(self):
         """INC SP"""
-        self.R.SP = helpers.wrap_16bit(self.R.SP + 1)
+        self.R.SP = (self.R.SP + 1) & 0xFFFF
         return 8
 
     def INC_34(self):
         """INC [HL]"""
         initial = self.mmu.get_memory(self.R.HL)
-        final = helpers.wrap_8bit(initial + 1)
+        final = (initial + 1) & 0xFF
         self.mmu.set_memory(self.R.HL, final)
 
         self.R.ZERO = (final == 0) & 1
@@ -1425,7 +1487,7 @@ class Opcodes:
     def DEC_35(self):
         """DEC [HL]"""
         initial = self.mmu.get_memory(self.R.HL)
-        final = helpers.wrap_8bit(initial - 1)
+        final = (initial - 1) & 0xFF
         self.mmu.set_memory(self.R.HL, final)
 
         self.R.ZERO = (final == 0) & 1
@@ -1449,7 +1511,8 @@ class Opcodes:
     def JR_38(self, value):
         """JR C, e8"""
         if self.R.CARRY == 1:
-            self.JR_18(value)
+            addr = (value ^ 0x80) - 0x80
+            self.R.PC += addr
             return 12
         return 8
 
@@ -1461,28 +1524,40 @@ class Opcodes:
         self.R.HALFCARRY = ((self.R.HL & 0xFFF) + (self.R.SP & 0xFFF) > 0xFFF) & 1
         self.R.CARRY = (calc > 0xFFFF) & 1
 
-        self.R.HL = helpers.wrap_16bit(calc)
+        self.R.HL = calc & 0xFFFF
         return 8
 
     def LD_3A(self):
         """LD A, [HLD]"""
         self.R.A = self.mmu.get_memory(self.R.HL)
-        self.R.HL = helpers.wrap_16bit(self.R.HL - 1)
+        self.R.HL = (self.R.HL - 1) & 0xFFFF
         return 8
 
     def DEC_3B(self):
         """DEC SP"""
-        self.R.SP = helpers.wrap_16bit(self.R.SP - 1)
+        self.R.SP = (self.R.SP - 1) & 0xFFFF
         return 8
 
     def INC_3C(self):
         """INC A"""
-        self.R.A = self.INC_R8(self.R.A)
+        calc = self.R.A + 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((self.R.A & 0xF) + 1 > 0xF) & 1
+        calc &= 0xFF
+
+        self.R.A = calc
         return 4
 
     def DEC_3D(self):
         """DEC A"""
-        self.R.A = self.DEC_R8(self.R.A)
+        calc = self.R.A - 1
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.A & 0xF) - 1 < 0) & 1
+        calc &= 0xFF
+
+        self.R.A = calc
         return 4
 
     def LD_3E(self, value):
@@ -1820,7 +1895,7 @@ class Opcodes:
     def ADD_A_N8(self, value):
         initial = self.R.A
         calc = initial + value
-        final = helpers.wrap_8bit(calc)
+        final = calc & 0xFF
         self.R.A = final
 
         self.R.ZERO = (final == 0) & 1
@@ -1872,7 +1947,7 @@ class Opcodes:
         initial = self.R.A
         carryBit = self.R.CARRY
         calc = initial + value + carryBit
-        final = helpers.wrap_8bit(calc)
+        final = calc & 0xFF
         self.R.A = final
 
         self.R.ZERO = (final == 0) & 1
@@ -1925,7 +2000,7 @@ class Opcodes:
     def SUB_A_N8(self, value):
         initial = self.R.A
         calc = initial - value
-        final = helpers.wrap_8bit(calc)
+        final = calc & 0xFF
         self.R.A = final
 
         self.R.ZERO = (final == 0) & 1
@@ -1977,7 +2052,7 @@ class Opcodes:
         initial = self.R.A
         carryBit = self.R.CARRY
         calc = initial - (value + carryBit)
-        final = helpers.wrap_8bit(calc)
+        final = calc & 0xFF
         self.R.A = final
 
         self.R.ZERO = (final == 0) & 1
@@ -2077,153 +2152,253 @@ class Opcodes:
         self.AND_A_N8(self.R.A)
         return 4
 
-    def XOR_A_N8(self, value):
-        initial = self.R.A
-        calc = initial ^ value
+    def XOR_A8(self):
+        """XOR A, B"""
+        calc = self.R.A ^ self.R.B
         self.R.A = calc
 
         self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = 0
-
-    def XOR_A8(self):
-        """XOR A, B"""
-        self.XOR_A_N8(self.R.B)
         return 4
 
     def XOR_A9(self):
         """XOR A, C"""
-        self.XOR_A_N8(self.R.C)
-        return 4
-
-    def XOR_AA(self):
-        """XOR A, D"""
-        self.XOR_A_N8(self.R.D)
-        return 4
-
-    def XOR_AB(self):
-        """XOR A, E"""
-        self.XOR_A_N8(self.R.E)
-        return 4
-
-    def XOR_AC(self):
-        """XOR A, H"""
-        self.XOR_A_N8(self.R.H)
-        return 4
-
-    def XOR_AD(self):
-        """XOR A, L"""
-        self.XOR_A_N8(self.R.L)
-        return 4
-
-    def XOR_AE(self):
-        """XOR A, [HL]"""
-        self.XOR_A_N8(self.mmu.get_memory(self.R.HL))
-        return 8
-
-    def XOR_AF(self):
-        """XOR A, A"""
-        self.XOR_A_N8(self.R.A)
-        return 4
-
-    def OR_A_N8(self, value):
-        initial = self.R.A
-        calc = initial | value
+        calc = self.R.A ^ self.R.C
         self.R.A = calc
 
         self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = 0
+        return 4
+
+    def XOR_AA(self):
+        """XOR A, D"""
+        calc = self.R.A ^ self.R.D
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        return 4
+
+    def XOR_AB(self):
+        """XOR A, E"""
+        calc = self.R.A ^ self.R.E
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        return 4
+
+    def XOR_AC(self):
+        """XOR A, H"""
+        calc = self.R.A ^ self.R.H
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        return 4
+
+    def XOR_AD(self):
+        """XOR A, L"""
+        calc = self.R.A ^ self.R.L
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        return 4
+
+    def XOR_AE(self):
+        """XOR A, [HL]"""
+        calc = self.R.A ^ self.mmu.get_memory(self.R.HL)
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        return 8
+
+    def XOR_AF(self):
+        """XOR A, A"""
+        calc = self.R.A ^ self.R.A
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        return 4
 
     def OR_B0(self):
         """OR A, B"""
-        self.OR_A_N8(self.R.B)
+        calc = self.R.A | self.R.B
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
         return 4
 
     def OR_B1(self):
         """OR A, C"""
-        self.OR_A_N8(self.R.C)
+        calc = self.R.A | self.R.C
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
         return 4
 
     def OR_B2(self):
         """OR A, D"""
-        self.OR_A_N8(self.R.D)
+        calc = self.R.A | self.R.D
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
         return 4
 
     def OR_B3(self):
         """OR A, E"""
-        self.OR_A_N8(self.R.E)
+        calc = self.R.A | self.R.E
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
         return 4
 
     def OR_B4(self):
         """OR A, H"""
-        self.OR_A_N8(self.R.H)
+        calc = self.R.A | self.R.H
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
         return 4
 
     def OR_B5(self):
         """OR A, L"""
-        self.OR_A_N8(self.R.L)
+        calc = self.R.A | self.R.L
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
         return 4
 
     def OR_B6(self):
         """OR A, [HL]"""
-        self.OR_A_N8(self.mmu.get_memory(self.R.HL))
+        calc = self.R.A | self.mmu.get_memory(self.R.HL)
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
         return 8
 
     def OR_B7(self):
         """OR A, A"""
-        self.OR_A_N8(self.R.A)
-        return 4
+        calc = self.R.A | self.R.A
+        self.R.A = calc
 
-    def CP_A_N8(self, value):
-        initial = self.R.A
-        calc = initial - value
-        final = helpers.wrap_8bit(calc)
-        self.R.ZERO = (final == 0) & 1
-        self.R.SUBTRACTION = 1
-        self.R.HALFCARRY = ((initial & 0xF) - (value & 0xF) < 0) & 1
-        self.R.CARRY = (calc < 0) & 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        return 4
 
     def CP_B8(self):
         """CP A, B"""
-        self.CP_A_N8(self.R.B)
+        calc = self.R.A - self.R.B
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.A & 0xF) - (self.R.B & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def CP_B9(self):
         """CP A, C"""
-        self.CP_A_N8(self.R.C)
+        calc = self.R.A - self.R.C
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.A & 0xF) - (self.R.C & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def CP_BA(self):
         """CP A, D"""
-        self.CP_A_N8(self.R.D)
+        calc = self.R.A - self.R.D
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.A & 0xF) - (self.R.D & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def CP_BB(self):
         """CP A, E"""
-        self.CP_A_N8(self.R.E)
+        calc = self.R.A - self.R.E
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.A & 0xF) - (self.R.E & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def CP_BC(self):
         """CP A, H"""
-        self.CP_A_N8(self.R.H)
+        calc = self.R.A - self.R.H
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.A & 0xF) - (self.R.H & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def CP_BD(self):
         """CP A, L"""
-        self.CP_A_N8(self.R.L)
+        calc = self.R.A - self.R.L
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.A & 0xF) - (self.R.L & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def CP_BE(self):
         """CP A, [HL]"""
-        self.CP_A_N8(self.mmu.get_memory(self.R.HL))
+        mem = self.mmu.get_memory(self.R.HL)
+        calc = self.R.A - mem
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.A & 0xF) - (mem & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 8
 
     def CP_BF(self):
         """CP A, A"""
-        self.CP_A_N8(self.R.A)
+        calc = self.R.A - self.R.A
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.A & 0xF) - (self.R.A & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def RET_C0(self):
@@ -2250,11 +2425,11 @@ class Opcodes:
         self.R.PC = address
         return 16
 
-    def CALL_C4(self, value):
+    def CALL_C4(self, address):
         """CALL NZ,n16"""
         if self.R.ZERO == 0:
             self.R.PUSH(self.R.PC)
-            self.JP_C3(value)
+            self.R.PC = address
             return 24
         return 12
 
@@ -2276,13 +2451,13 @@ class Opcodes:
     def RET_C8(self):
         """RET Z"""
         if self.R.ZERO == 1:
-            self.JP_C3(self.R.POP())
+            self.R.PC = self.R.POP()
             return 20
         return 8
 
     def RET_C9(self):
         """RET"""
-        self.JP_C3(self.R.POP())
+        self.R.PC = self.R.POP()
         return 16
 
     def JP_CA(self, address):
@@ -2293,9 +2468,8 @@ class Opcodes:
         return 12
 
     def RLC_R8(self, value):
-        initial = value
-        carryBit = initial >> 7
-        calc = (initial << 1) & 0b11111110 | carryBit
+        carryBit = value >> 7
+        calc = (value << 1) & 0b11111110 | carryBit
         self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
@@ -2696,8 +2870,7 @@ class Opcodes:
         return 8
 
     def BIT_U3R8(self, register, value):
-        initial = register
-        calc = initial >> (value) & 0b1
+        calc = register >> (value) & 0b1
         self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 1
@@ -3023,9 +3196,8 @@ class Opcodes:
         return 8
 
     def RES_U3R8(self, register, value):
-        initial = register
-        higher = initial >> value + 1 << value + 1
-        lower = ((initial << 8 - value) & 0xFF) >> 8 - value
+        higher = register >> value + 1 << value + 1
+        lower = ((register << 8 - value) & 0xFF) >> 8 - value
         calc = higher | lower
         return calc
 
@@ -3350,9 +3522,8 @@ class Opcodes:
         return 8
 
     def SET_U3R8(self, register, value):
-        initial = register
-        higher = ((initial >> value) | 1) << value
-        lower = ((initial << 8 - value) & 0xFF) >> 8 - value
+        higher = ((register >> value) | 1) << value
+        lower = ((register << 8 - value) & 0xFF) >> 8 - value
         calc = higher | lower
         return calc
 
@@ -3680,7 +3851,7 @@ class Opcodes:
         """CALL Z,n16"""
         if self.R.ZERO == 1:
             self.R.PUSH(self.R.PC)
-            self.JP_C3(value)
+            self.R.PC = value
             return 24
         return 12
 
@@ -3704,7 +3875,7 @@ class Opcodes:
     def RET_D0(self):
         """RET NC"""
         if self.R.CARRY == 0:
-            self.JP_C3(self.R.POP())
+            self.R.PC = self.R.POP()
             return 20
         return 8
 
@@ -3720,11 +3891,11 @@ class Opcodes:
             return 16
         return 12
 
-    def CALL_D4(self, value):
+    def CALL_D4(self, address):
         """CALL NC,n16"""
         if self.R.CARRY == 0:
             self.R.PUSH(self.R.PC)
-            self.JP_C3(value)
+            self.R.PC = address
             return 24
         return 12
 
@@ -3746,7 +3917,7 @@ class Opcodes:
     def RET_D8(self):
         """RET C"""
         if self.R.CARRY == 1:
-            self.JP_C3(self.R.POP())
+            self.R.PC = self.R.POP()
             return 20
         return 8
 
@@ -3763,11 +3934,11 @@ class Opcodes:
             return 16
         return 12
 
-    def CALL_DC(self, value):
+    def CALL_DC(self, address):
         """CALL C,n16"""
         if self.R.CARRY == 1:
             self.R.PUSH(self.R.PC)
-            self.JP_C3(value)
+            self.R.PC = address
             return 24
         return 12
 
@@ -3814,8 +3985,8 @@ class Opcodes:
     def ADD_E8(self, value):
         """ADD SP, e8"""
         initial = self.R.SP
-        calc = helpers.signed_value(value)
-        final = helpers.wrap_16bit(initial + calc)
+        calc = (value ^ 0x80) - 0x80
+        final = (initial + calc) & 0xFFFF
         self.R.SP = final
 
         self.R.ZERO = 0
@@ -3841,7 +4012,13 @@ class Opcodes:
 
     def XOR_EE(self, value):
         """XOR A, n8"""
-        self.XOR_A_N8(value)
+        calc = self.R.A ^ value
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
         return 8
 
     def RST_EF(self):
@@ -3876,7 +4053,13 @@ class Opcodes:
 
     def OR_F6(self, value):
         """OR A, n8"""
-        self.OR_A_N8(value)
+        calc = self.R.A | value
+        self.R.A = calc
+
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
         return 8
 
     def RST_F7(self):
@@ -3886,9 +4069,9 @@ class Opcodes:
 
     def LD_F8(self, value):
         """LD HL, SP + e8"""
-        addr = helpers.signed_value(value)
+        addr = (value ^ 0x80) - 0x80
         calc = self.R.SP + addr
-        final = helpers.wrap_16bit(calc)
+        final = calc & 0xFFFF
         self.R.HL = final
 
         self.R.ZERO = 0
@@ -3920,7 +4103,11 @@ class Opcodes:
 
     def CP_FE(self, value):
         """CP A, n8"""
-        self.CP_A_N8(value)
+        calc = self.R.A - value
+        self.R.ZERO = ((calc & 0xFF) == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((self.R.A & 0xF) - (value & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 8
 
     def RST_FF(self):

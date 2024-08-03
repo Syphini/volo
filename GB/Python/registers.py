@@ -75,23 +75,20 @@ class Registers:
         self.L = value & 0xFF
 
     def PUSH(self, value: int):
-        self.SP = helpers.wrap_16bit(self.SP - 1)
+        self.SP = (self.SP - 1) & 0xFFFF
         self.mmu.set_memory(self.SP, value >> 8)
 
-        self.SP = helpers.wrap_16bit(self.SP - 1)
+        self.SP = (self.SP - 1) & 0xFFFF
         self.mmu.set_memory(self.SP, value & 0xFF)
 
     def POP(self):
         lower = self.mmu.get_memory(self.SP)
-        self.SP = helpers.wrap_16bit(self.SP + 1)
+        self.SP = (self.SP + 1) & 0xFFFF
 
         higher = self.mmu.get_memory(self.SP)
-        self.SP = helpers.wrap_16bit(self.SP + 1)
+        self.SP = (self.SP + 1) & 0xFFFF
 
         return higher << 8 | lower
-
-    def INCREMENT_PC(self, value: int):
-        self.PC += value
 
     def debug(self):
         data = {
@@ -122,11 +119,14 @@ class Registers:
 
 class IO:
     def __init__(self, mmu):
+
+        self.MMU = mmu
+
         self.JOYP = Joypad(self)  # FF00
         self.SB = 0x00  # FF01
         self.SC = 0x73  # FF02
         self._TIMER = Timer(self)  # FF04 -> FF07
-        self.IF = Interrupts(0xE1)  # FF0F
+        self.IF = Interrupts(0xE1, upper_bits=True)  # FF0F
         self.NR10 = 0x80  # FF10
         self.NR11 = 0xBF  # FF11
         self.NR12 = 0xF3  # FF12
@@ -151,6 +151,7 @@ class IO:
         self.WAVE = bytearray(0x10)  # FF30 -> FF3F
         self.LCD = PPU(mmu)  # FF40 -> FF4B
         # ???
+        self.BANK = (not mmu.USE_BOOT_ROM) & 1  # FF50
         self.IE = Interrupts()  # FFFF
 
     def get(self, address):
@@ -191,6 +192,10 @@ class IO:
                 self.WAVE[address - 0xFF30] = value
             case addr if 0xFF40 <= addr <= 0xFF4B:
                 self.LCD.set(addr, value)
+            case 0xFF50:
+                self.BANK = value
+                if self.BANK != 0:
+                    self.MMU.switch_rom_bank(0)
             case _:
                 print(
                     f"Ignoring IO Address SET: {helpers.formatted_hex(address)} {helpers.formatted_hex(value)}"
@@ -219,50 +224,45 @@ class IO:
                 0x00,
                 0x00,
                 self.IF.get(),
+                self.NR10,
+                self.NR11,
+                self.NR12,
+                self.NR13,
+                self.NR14,
+                0x00,
+                self.NR21,
+                self.NR22,
+                self.NR23,
+                self.NR24,
+                self.NR30,
+                self.NR31,
+                self.NR32,
+                self.NR33,
+                self.NR34,
+                0x00,
+                self.NR41,
+                self.NR42,
+                self.NR43,
+                self.NR44,
+                self.NR50,
+                self.NR51,
+                self.NR52,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
             ]
         )
-        data.extend(
-            bytearray(
-                [
-                    self.NR10,
-                    self.NR11,
-                    self.NR12,
-                    self.NR13,
-                    self.NR14,
-                    0x00,
-                    self.NR21,
-                    self.NR22,
-                    self.NR23,
-                    self.NR24,
-                    self.NR30,
-                    self.NR31,
-                    self.NR32,
-                    self.NR33,
-                    self.NR34,
-                    0x00,
-                    self.NR41,
-                    self.NR42,
-                    self.NR43,
-                    self.NR44,
-                    self.NR50,
-                    self.NR51,
-                    self.NR52,
-                    0x00,
-                    0x00,
-                    0x00,
-                    0x00,
-                    0x00,
-                    0x00,
-                    0x00,
-                    0x00,
-                    0x00,
-                ]
-            )
-        )
-
         data.extend(self.WAVE)
         data.extend(self.LCD.dump())
-        data.extend(bytearray(0x34))
+        data.extend(bytearray(0x4))
+        data.extend(bytearray([self.BANK]))
+        data.extend(bytearray(0x2F))
 
         return data
 
@@ -339,7 +339,7 @@ class Timer:
 
     def tick(self, cycles):
         for _ in range(cycles):
-            self._DIVIDER = helpers.wrap_16bit(self._DIVIDER + 1)
+            self._DIVIDER = (self._DIVIDER + 1) & 0xFFFF
 
             if self._TAC_ENABLE == 1:
                 self.CLOCK -= 1
@@ -356,8 +356,9 @@ class Timer:
 
 
 class Interrupts:
-    def __init__(self, value=0x00):
+    def __init__(self, value=0x00, upper_bits=False):
         self.set(value)
+        self.UPPER_F = upper_bits
 
     def set(self, value):
         self.JOYPAD = value >> 4 & 1
@@ -368,8 +369,8 @@ class Interrupts:
 
     def get(self):
         return (
-            # 7 << 5 |
-            self.JOYPAD << 4
+            (7 << 5 if self.UPPER_F else 0)
+            | self.JOYPAD << 4
             | self.SERIAL << 3
             | self.TIMER << 2
             | self.LCD << 1
@@ -384,8 +385,8 @@ class Joypad:
 
         self.IO = IO
 
-        self.USE_SELECT = True
-        self.USE_DPAD = True
+        self.USE_SELECT = False
+        self.USE_DPAD = False
 
         self.reset_keys()
 
@@ -403,13 +404,27 @@ class Joypad:
         self.RIGHT = False
 
     def get(self):
+        final = 0xF
+        if self.USE_SELECT:
+            final = (
+                (not (self.START) & 1) << 3
+                | (not (self.SELECT) & 1) << 2
+                | (not (self.B) & 1) << 1
+                | (not (self.A) & 1)
+            )
+        if self.USE_DPAD:
+            final = (
+                (not (self.DOWN) & 1) << 3
+                | (not (self.UP) & 1) << 2
+                | (not (self.LEFT) & 1) << 1
+                | (not (self.RIGHT) & 1)
+            )
+
         return (
-            self.USE_SELECT << 5
-            | self.USE_DPAD << 4
-            | (not (self.START | self.DOWN) & 1) << 3
-            | (not (self.SELECT | self.UP) & 1) << 2
-            | (not (self.B | self.LEFT) & 1) << 1
-            | (not (self.A | self.RIGHT) & 1)
+            7 << 5
+            | (not (self.USE_SELECT) & 1) << 5
+            | (not (self.USE_DPAD) & 1) << 4
+            | final
         )
 
     def set(self, value):

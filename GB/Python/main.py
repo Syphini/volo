@@ -1,9 +1,10 @@
-import time
+import cProfile
+import pstats
 import traceback
 import sys
 import pygame
-from cartridge import Cartridge
 import helpers
+from cartridge import Cartridge
 from mmu import MMU
 from registers import Registers
 from opcodes import Opcodes
@@ -11,7 +12,11 @@ from opcodes import Opcodes
 print()
 
 OP_DEBUG = False
-TIME_DEBUG = True
+PROFILE_DEBUG = True
+
+if PROFILE_DEBUG:
+    profiler = cProfile.Profile()
+    profiler.enable()
 
 ROM_FILE = "GB/ROM/cpu_instrs.gb"
 
@@ -25,16 +30,6 @@ opcodes = Opcodes(mmu, R)
 # endregion
 
 
-def handle_events():
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            dump()
-            pygame.quit()
-            print("Closed App")
-            sys.exit()
-        mmu.IO.JOYP.handle_event(event)
-
-
 def dump(exception=None):
     print("------")
     R.debug()
@@ -42,17 +37,32 @@ def dump(exception=None):
     if exception:
         traceback.print_exception(exception)
     mmu.dump()
-    print("Exiting...")
+
+    if PROFILE_DEBUG:
+        profiler.disable()
+        stats = pstats.Stats(profiler).sort_stats("ncalls")
+        stats.print_stats()
 
 
-count = 0
-lastTime = time.time() * 1000
+lastTime = 0
 
 # region CPU Logic
 try:
     while True:
-        count += 1
-        handle_events()
+        if pygame.time.get_ticks() - lastTime >= 1000:
+            pygame.display.set_caption(f"FPS: {mmu.IO.LCD.FPS_COUNTER}")
+            lastTime = pygame.time.get_ticks()
+            mmu.IO.LCD.FPS_COUNTER = 0
+
+        # region Events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                dump()
+                pygame.quit()
+                print("Closed App")
+                sys.exit()
+            mmu.IO.JOYP.handle_event(event)
+        # endregion
 
         # region Interrupts
 
@@ -109,7 +119,7 @@ try:
         if PC_DATA == 0xCB:
             CB_FLAG = True
             PC_DATA = mmu.get_memory(R.PC + 1)
-            R.INCREMENT_PC(1)
+            R.PC += 1
 
         # region DEBUG
         if OP_DEBUG:
@@ -123,15 +133,9 @@ try:
         cycles = opcodes.execute(PC_DATA, CB_FLAG)
         mmu.IO.tick(cycles)
 
-        if count == 10000:
-            count = 0
-            if TIME_DEBUG:
-                newTime = time.time() * 1000
-                print("Cycle Time:", newTime - lastTime)
-                lastTime = newTime
-
 
 # endregion
 
 except Exception as e:
     dump(e)
+    print("Exiting...")
