@@ -1134,10 +1134,6 @@ class Opcodes:
         self.R.HL = calc & 0xFFFF
         return 8
 
-    def STOP_10(self):
-        """STOP 0"""
-        return 4
-
     def LD_0A(self):
         """LD A, [BC]"""
         self.R.A = self.mmu.get_memory(self.R.BC)
@@ -1186,6 +1182,10 @@ class Opcodes:
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
+        return 4
+
+    def STOP_10(self):
+        """STOP 0"""
         return 4
 
     def LD_11(self, value: int):
@@ -1277,7 +1277,6 @@ class Opcodes:
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = ((self.R.E & 0xF) + 1 > 0xF) & 1
         calc &= 0xFF
-
         self.R.E = calc
         return 4
 
@@ -1288,7 +1287,6 @@ class Opcodes:
         self.R.SUBTRACTION = 1
         self.R.HALFCARRY = ((self.R.E & 0xF) - 1 < 0) & 1
         calc &= 0xFF
-
         self.R.E = calc
         return 4
 
@@ -1303,7 +1301,6 @@ class Opcodes:
         carryBit = initial & 1
         calc = (self.R.CARRY << 7) | initial >> 1
         self.R.A = calc
-
         self.R.ZERO = 0
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
@@ -1341,7 +1338,6 @@ class Opcodes:
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = ((self.R.H & 0xF) + 1 > 0xF) & 1
         calc &= 0xFF
-
         self.R.H = calc
         return 4
 
@@ -1352,7 +1348,6 @@ class Opcodes:
         self.R.SUBTRACTION = 1
         self.R.HALFCARRY = ((self.R.H & 0xF) - 1 < 0) & 1
         calc &= 0xFF
-
         self.R.H = calc
         return 4
 
@@ -1395,11 +1390,9 @@ class Opcodes:
     def ADD_29(self):
         """ADD HL, HL"""
         calc = self.R.HL + self.R.HL
-
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = ((self.R.HL & 0xFFF) + (self.R.HL & 0xFFF) > 0xFFF) & 1
         self.R.CARRY = (calc > 0xFFFF) & 1
-
         self.R.HL = calc & 0xFFFF
         return 8
 
@@ -1421,7 +1414,6 @@ class Opcodes:
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = ((self.R.L & 0xF) + 1 > 0xF) & 1
         calc &= 0xFF
-
         self.R.L = calc
         return 4
 
@@ -1432,7 +1424,6 @@ class Opcodes:
         self.R.SUBTRACTION = 1
         self.R.HALFCARRY = ((self.R.L & 0xF) - 1 < 0) & 1
         calc &= 0xFF
-
         self.R.L = calc
         return 4
 
@@ -1477,11 +1468,9 @@ class Opcodes:
         initial = self.mmu.get_memory(self.R.HL)
         final = (initial + 1) & 0xFF
         self.mmu.set_memory(self.R.HL, final)
-
         self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = ((initial & 0xF) + 1 > 0xF) & 1
-
         return 12
 
     def DEC_35(self):
@@ -1489,11 +1478,9 @@ class Opcodes:
         initial = self.mmu.get_memory(self.R.HL)
         final = (initial - 1) & 0xFF
         self.mmu.set_memory(self.R.HL, final)
-
         self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 1
         self.R.HALFCARRY = ((initial & 0xF) - 1 < 0) & 1
-
         return 12
 
     def LD_36(self, value):
@@ -1519,11 +1506,9 @@ class Opcodes:
     def ADD_39(self):
         """ADD HL, SP"""
         calc = self.R.HL + self.R.SP
-
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = ((self.R.HL & 0xFFF) + (self.R.SP & 0xFFF) > 0xFFF) & 1
         self.R.CARRY = (calc > 0xFFFF) & 1
-
         self.R.HL = calc & 0xFFFF
         return 8
 
@@ -1545,7 +1530,6 @@ class Opcodes:
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = ((self.R.A & 0xF) + 1 > 0xF) & 1
         calc &= 0xFF
-
         self.R.A = calc
         return 4
 
@@ -1556,7 +1540,6 @@ class Opcodes:
         self.R.SUBTRACTION = 1
         self.R.HALFCARRY = ((self.R.A & 0xF) - 1 < 0) & 1
         calc &= 0xFF
-
         self.R.A = calc
         return 4
 
@@ -1892,264 +1875,525 @@ class Opcodes:
         self.R.A = self.R.A
         return 4
 
-    def ADD_A_N8(self, value):
-        initial = self.R.A
-        calc = initial + value
-        final = calc & 0xFF
-        self.R.A = final
-
-        self.R.ZERO = (final == 0) & 1
-        self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = ((initial & 0xF) + (value & 0xF) > 0xF) & 1
-        self.R.CARRY = (calc > 0xFF) & 1
-
     def ADD_80(self):
         """ADD A, B"""
-        self.ADD_A_N8(self.R.B)
+        initial = self.R.A
+        calc = initial + self.R.B
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((initial & 0xF) + (self.R.B & 0xF) > 0xF) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 4
 
     def ADD_81(self):
         """ADD A, C"""
-        self.ADD_A_N8(self.R.C)
+        initial = self.R.A
+        calc = initial + self.R.C
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((initial & 0xF) + (self.R.C & 0xF) > 0xF) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 4
 
     def ADD_82(self):
         """ADD A, D"""
-        self.ADD_A_N8(self.R.D)
+        initial = self.R.A
+        calc = initial + self.R.D
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((initial & 0xF) + (self.R.D & 0xF) > 0xF) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 4
 
     def ADD_83(self):
         """ADD A, E"""
-        self.ADD_A_N8(self.R.E)
+        initial = self.R.A
+        calc = initial + self.R.E
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((initial & 0xF) + (self.R.E & 0xF) > 0xF) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 4
 
     def ADD_84(self):
         """ADD A, H"""
-        self.ADD_A_N8(self.R.H)
+        initial = self.R.A
+        calc = initial + self.R.H
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((initial & 0xF) + (self.R.H & 0xF) > 0xF) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 4
 
     def ADD_85(self):
         """ADD A, L"""
-        self.ADD_A_N8(self.R.L)
+        initial = self.R.A
+        calc = initial + self.R.L
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((initial & 0xF) + (self.R.L & 0xF) > 0xF) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 4
 
     def ADD_86(self):
         """ADD A, [HL]"""
-        self.ADD_A_N8(self.mmu.get_memory(self.R.HL))
+        mem = self.mmu.get_memory(self.R.HL)
+        initial = self.R.A
+        calc = initial + mem
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((initial & 0xF) + (mem & 0xF) > 0xF) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 8
 
     def ADD_87(self):
         """ADD A, A"""
-        self.ADD_A_N8(self.R.A)
-        return 4
-
-    def ADC_A_N8(self, value):
         initial = self.R.A
-        carryBit = self.R.CARRY
-        calc = initial + value + carryBit
+        calc = initial + self.R.A
         final = calc & 0xFF
         self.R.A = final
-
         self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = (
-            (initial & 0xF) + (value & 0xF) + (carryBit & 0xF) > 0xF
-        ) & 1
+        self.R.HALFCARRY = ((initial & 0xF) + (self.R.A & 0xF) > 0xF) & 1
         self.R.CARRY = (calc > 0xFF) & 1
+        return 4
 
     def ADC_88(self):
         """ADC A, B"""
-        self.ADC_A_N8(self.R.B)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial + self.R.B + carryBit
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = (
+            (initial & 0xF) + (self.R.B & 0xF) + (carryBit & 0xF) > 0xF
+        ) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 4
 
     def ADC_89(self):
         """ADC A, C"""
-        self.ADC_A_N8(self.R.C)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial + self.R.C + carryBit
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = (
+            (initial & 0xF) + (self.R.C & 0xF) + (carryBit & 0xF) > 0xF
+        ) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 4
 
     def ADC_8A(self):
         """ADC A, D"""
-        self.ADC_A_N8(self.R.D)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial + self.R.D + carryBit
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = (
+            (initial & 0xF) + (self.R.D & 0xF) + (carryBit & 0xF) > 0xF
+        ) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 4
 
     def ADC_8B(self):
         """ADC A, E"""
-        self.ADC_A_N8(self.R.E)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial + self.R.E + carryBit
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = (
+            (initial & 0xF) + (self.R.E & 0xF) + (carryBit & 0xF) > 0xF
+        ) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 4
 
     def ADC_8C(self):
         """ADC A, H"""
-        self.ADC_A_N8(self.R.H)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial + self.R.H + carryBit
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = (
+            (initial & 0xF) + (self.R.H & 0xF) + (carryBit & 0xF) > 0xF
+        ) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 4
 
     def ADC_8D(self):
         """ADC A, L"""
-        self.ADC_A_N8(self.R.L)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial + self.R.L + carryBit
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = (
+            (initial & 0xF) + (self.R.L & 0xF) + (carryBit & 0xF) > 0xF
+        ) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 4
 
     def ADC_8E(self):
         """ADC A, [HL]"""
-        self.ADC_A_N8(self.mmu.get_memory(self.R.HL))
+        mem = self.mmu.get_memory(self.R.HL)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial + mem + carryBit
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((initial & 0xF) + (mem & 0xF) + (carryBit & 0xF) > 0xF) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 8
 
     def ADC_8F(self):
         """ADC A, A"""
-        self.ADC_A_N8(self.R.A)
-        return 4
-
-    def SUB_A_N8(self, value):
         initial = self.R.A
-        calc = initial - value
+        carryBit = self.R.CARRY
+        calc = initial + self.R.A + carryBit
         final = calc & 0xFF
         self.R.A = final
-
         self.R.ZERO = (final == 0) & 1
-        self.R.SUBTRACTION = 1
-        self.R.HALFCARRY = ((initial & 0xF) - (value & 0xF) < 0) & 1
-        self.R.CARRY = (calc < 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = (
+            (initial & 0xF) + (self.R.A & 0xF) + (carryBit & 0xF) > 0xF
+        ) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
+        return 4
 
     def SUB_90(self):
         """SUB A, B"""
-        self.SUB_A_N8(self.R.B)
+        initial = self.R.A
+        calc = initial - self.R.B
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((initial & 0xF) - (self.R.B & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def SUB_91(self):
         """SUB A, C"""
-        self.SUB_A_N8(self.R.C)
+        initial = self.R.A
+        calc = initial - self.R.C
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((initial & 0xF) - (self.R.C & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def SUB_92(self):
         """SUB A, D"""
-        self.SUB_A_N8(self.R.D)
+        initial = self.R.A
+        calc = initial - self.R.D
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((initial & 0xF) - (self.R.D & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def SUB_93(self):
         """SUB A, E"""
-        self.SUB_A_N8(self.R.E)
+        initial = self.R.A
+        calc = initial - self.R.E
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((initial & 0xF) - (self.R.E & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def SUB_94(self):
         """SUB A, H"""
-        self.SUB_A_N8(self.R.H)
+        initial = self.R.A
+        calc = initial - self.R.H
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((initial & 0xF) - (self.R.H & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def SUB_95(self):
         """SUB A, L"""
-        self.SUB_A_N8(self.R.L)
+        initial = self.R.A
+        calc = initial - self.R.L
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((initial & 0xF) - (self.R.L & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def SUB_96(self):
         """SUB A, [HL]"""
-        self.SUB_A_N8(self.mmu.get_memory(self.R.HL))
+        mem = self.mmu.get_memory(self.R.HL)
+        initial = self.R.A
+        calc = initial - mem
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((initial & 0xF) - (mem & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 8
 
     def SUB_97(self):
         """SUB A, A"""
-        self.SUB_A_N8(self.R.A)
-        return 4
-
-    def SBC_A_N8(self, value):
         initial = self.R.A
-        carryBit = self.R.CARRY
-        calc = initial - (value + carryBit)
+        calc = initial - self.R.A
         final = calc & 0xFF
         self.R.A = final
-
         self.R.ZERO = (final == 0) & 1
         self.R.SUBTRACTION = 1
-        self.R.HALFCARRY = (
-            (initial & 0xF) - ((value & 0xF) + (carryBit & 0xF)) < 0
-        ) & 1
+        self.R.HALFCARRY = ((initial & 0xF) - (self.R.A & 0xF) < 0) & 1
         self.R.CARRY = (calc < 0) & 1
+        return 4
 
     def SBC_98(self):
         """SBC A, B"""
-        self.SBC_A_N8(self.R.B)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial - (self.R.B + carryBit)
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = (
+            (initial & 0xF) - ((self.R.B & 0xF) + (carryBit & 0xF)) < 0
+        ) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def SBC_99(self):
         """SBC A, C"""
-        self.SBC_A_N8(self.R.C)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial - (self.R.C + carryBit)
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = (
+            (initial & 0xF) - ((self.R.C & 0xF) + (carryBit & 0xF)) < 0
+        ) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def SBC_9A(self):
         """SBC A, D"""
-        self.SBC_A_N8(self.R.D)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial - (self.R.D + carryBit)
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = (
+            (initial & 0xF) - ((self.R.D & 0xF) + (carryBit & 0xF)) < 0
+        ) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def SBC_9B(self):
         """SBC A, E"""
-        self.SBC_A_N8(self.R.E)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial - (self.R.E + carryBit)
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = (
+            (initial & 0xF) - ((self.R.E & 0xF) + (carryBit & 0xF)) < 0
+        ) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def SBC_9C(self):
         """SBC A, H"""
-        self.SBC_A_N8(self.R.H)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial - (self.R.H + carryBit)
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = (
+            (initial & 0xF) - ((self.R.H & 0xF) + (carryBit & 0xF)) < 0
+        ) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def SBC_9D(self):
         """SBC A, L"""
-        self.SBC_A_N8(self.R.L)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial - (self.R.L + carryBit)
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = (
+            (initial & 0xF) - ((self.R.L & 0xF) + (carryBit & 0xF)) < 0
+        ) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
     def SBC_9E(self):
         """SBC A, [HL]"""
-        self.SBC_A_N8(self.mmu.get_memory(self.R.HL))
+        mem = self.mmu.get_memory(self.R.HL)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial - (mem + carryBit)
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((initial & 0xF) - ((mem & 0xF) + (carryBit & 0xF)) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 8
 
     def SBC_9F(self):
         """SBC A, A"""
-        self.SBC_A_N8(self.R.A)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial - (self.R.A + carryBit)
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = (
+            (initial & 0xF) - ((self.R.A & 0xF) + (carryBit & 0xF)) < 0
+        ) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 4
 
-    def AND_A_N8(self, value):
+    def AND_A0(self):
+        """AND A, B"""
         initial = self.R.A
-        calc = initial & value
+        calc = initial & self.R.B
         self.R.A = calc
-
         self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 1
         self.R.CARRY = 0
-
-    def AND_A0(self):
-        """AND A, B"""
-        self.AND_A_N8(self.R.B)
         return 4
 
     def AND_A1(self):
         """AND A, C"""
-        self.AND_A_N8(self.R.C)
+        initial = self.R.A
+        calc = initial & self.R.C
+        self.R.A = calc
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 1
+        self.R.CARRY = 0
         return 4
 
     def AND_A2(self):
         """AND A, D"""
-        self.AND_A_N8(self.R.D)
+        initial = self.R.A
+        calc = initial & self.R.D
+        self.R.A = calc
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 1
+        self.R.CARRY = 0
         return 4
 
     def AND_A3(self):
         """AND A, E"""
-        self.AND_A_N8(self.R.E)
+        initial = self.R.A
+        calc = initial & self.R.E
+        self.R.A = calc
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 1
+        self.R.CARRY = 0
         return 4
 
     def AND_A4(self):
         """AND A, H"""
-        self.AND_A_N8(self.R.H)
+        initial = self.R.A
+        calc = initial & self.R.H
+        self.R.A = calc
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 1
+        self.R.CARRY = 0
         return 4
 
     def AND_A5(self):
         """AND A, L"""
-        self.AND_A_N8(self.R.L)
+        initial = self.R.A
+        calc = initial & self.R.L
+        self.R.A = calc
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 1
+        self.R.CARRY = 0
         return 4
 
     def AND_A6(self):
         """AND A, [HL]"""
-        self.AND_A_N8(self.mmu.get_memory(self.R.HL))
+        mem = self.mmu.get_memory(self.R.HL)
+        initial = self.R.A
+        calc = initial & mem
+        self.R.A = calc
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 1
+        self.R.CARRY = 0
         return 8
 
     def AND_A7(self):
         """AND A, A"""
-        self.AND_A_N8(self.R.A)
+        initial = self.R.A
+        calc = initial & self.R.A
+        self.R.A = calc
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 1
+        self.R.CARRY = 0
         return 4
 
     def XOR_A8(self):
@@ -2440,7 +2684,14 @@ class Opcodes:
 
     def ADD_C6(self, value):
         """ADD A, n8"""
-        self.ADD_A_N8(value)
+        initial = self.R.A
+        calc = initial + value
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = ((initial & 0xF) + (value & 0xF) > 0xF) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 8
 
     def RST_C7(self):
@@ -2467,406 +2718,708 @@ class Opcodes:
             return 16
         return 12
 
-    def RLC_R8(self, value):
-        carryBit = value >> 7
-        calc = (value << 1) & 0b11111110 | carryBit
+    def RLC_CB00(self):
+        """RLC B"""
+        carryBit = self.R.B >> 7
+        calc = (self.R.B << 1) & 0b11111110 | carryBit
         self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
-        return calc
-
-    def RLC_CB00(self):
-        """RLC B"""
-        self.R.B = self.RLC_R8(self.R.B)
+        self.R.B = calc
         return 8
 
     def RLC_CB01(self):
         """RLC C"""
-        self.R.C = self.RLC_R8(self.R.C)
+        carryBit = self.R.C >> 7
+        calc = (self.R.C << 1) & 0b11111110 | carryBit
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.C = calc
         return 8
 
     def RLC_CB02(self):
         """RLC D"""
-        self.R.D = self.RLC_R8(self.R.D)
+        carryBit = self.R.D >> 7
+        calc = (self.R.D << 1) & 0b11111110 | carryBit
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.D = calc
         return 8
 
     def RLC_CB03(self):
         """RLC E"""
-        self.R.E = self.RLC_R8(self.R.E)
+        carryBit = self.R.E >> 7
+        calc = (self.R.E << 1) & 0b11111110 | carryBit
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.E = calc
         return 8
 
     def RLC_CB04(self):
         """RLC H"""
-        self.R.H = self.RLC_R8(self.R.H)
+        carryBit = self.R.H >> 7
+        calc = (self.R.H << 1) & 0b11111110 | carryBit
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.H = calc
         return 8
 
     def RLC_CB05(self):
         """RLC L"""
-        self.R.L = self.RLC_R8(self.R.L)
+        carryBit = self.R.L >> 7
+        calc = (self.R.L << 1) & 0b11111110 | carryBit
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.L = calc
         return 8
 
     def RLC_CB06(self):
         """RLC [HL]"""
-        self.mmu.set_memory(self.R.HL, self.RLC_R8(self.mmu.get_memory(self.R.HL)))
+        mem = self.mmu.get_memory(self.R.HL)
+        carryBit = mem >> 7
+        calc = (mem << 1) & 0b11111110 | carryBit
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.mmu.set_memory(self.R.HL, calc)
         return 16
 
     def RLC_CB07(self):
         """RLC A"""
-        self.R.A = self.RLC_R8(self.R.A)
-        return 8
-
-    def RRC_R8(self, register):
-        initial = register
-        carryBit = initial & 1
-        calc = (carryBit << 7) | initial >> 1
-
+        carryBit = self.R.A >> 7
+        calc = (self.R.A << 1) & 0b11111110 | carryBit
         self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
-        return calc
+        self.R.A = calc
+        return 8
 
     def RRC_CB08(self):
         """RRC B"""
-        self.R.B = self.RRC_R8(self.R.B)
+        carryBit = self.R.B & 1
+        calc = (carryBit << 7) | self.R.B >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.B = calc
         return 8
 
     def RRC_CB09(self):
         """RRC C"""
-        self.R.C = self.RRC_R8(self.R.C)
+        carryBit = self.R.C & 1
+        calc = (carryBit << 7) | self.R.C >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.C = calc
         return 8
 
     def RRC_CB0A(self):
         """RRC D"""
-        self.R.D = self.RRC_R8(self.R.D)
+        carryBit = self.R.D & 1
+        calc = (carryBit << 7) | self.R.D >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.D = calc
         return 8
 
     def RRC_CB0B(self):
         """RRC E"""
-        self.R.E = self.RRC_R8(self.R.E)
+        carryBit = self.R.E & 1
+        calc = (carryBit << 7) | self.R.E >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.E = calc
         return 8
 
     def RRC_CB0C(self):
         """RRC H"""
-        self.R.H = self.RRC_R8(self.R.H)
+        carryBit = self.R.H & 1
+        calc = (carryBit << 7) | self.R.H >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.H = calc
         return 8
 
     def RRC_CB0D(self):
         """RRC L"""
-        self.R.L = self.RRC_R8(self.R.L)
+        carryBit = self.R.L & 1
+        calc = (carryBit << 7) | self.R.L >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.L = calc
         return 8
 
     def RRC_CB0E(self):
         """RRC [HL]"""
-        self.mmu.set_memory(self.R.HL, self.RRC_R8(self.mmu.get_memory(self.R.HL)))
+        mem = self.mmu.get_memory(self.R.HL)
+        carryBit = mem & 1
+        calc = (carryBit << 7) | mem >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.mmu.set_memory(self.R.HL, calc)
         return 16
 
     def RRC_CB0F(self):
         """RRC A"""
-        self.R.A = self.RRC_R8(self.R.A)
-        return 8
-
-    def RL_R8(self, register):
-        initial = register
-        carryBit = initial >> 7
-        calc = (initial << 1) & 0b11111110 | self.R.CARRY
+        carryBit = self.R.A & 1
+        calc = (carryBit << 7) | self.R.A >> 1
         self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
-        return calc
+        self.R.A = calc
+        return 8
 
     def RL_CB10(self):
         """RL B"""
-        self.R.B = self.RL_R8(self.R.B)
+        carryBit = self.R.B >> 7
+        calc = (self.R.B << 1) & 0b11111110 | self.R.CARRY
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.B = calc
         return 8
 
     def RL_CB11(self):
         """RL C"""
-        self.R.C = self.RL_R8(self.R.C)
+        carryBit = self.R.C >> 7
+        calc = (self.R.C << 1) & 0b11111110 | self.R.CARRY
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.C = calc
         return 8
 
     def RL_CB12(self):
         """RL D"""
-        self.R.D = self.RL_R8(self.R.D)
+        carryBit = self.R.D >> 7
+        calc = (self.R.D << 1) & 0b11111110 | self.R.CARRY
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.D = calc
         return 8
 
     def RL_CB13(self):
         """RL E"""
-        self.R.E = self.RL_R8(self.R.E)
+        carryBit = self.R.E >> 7
+        calc = (self.R.E << 1) & 0b11111110 | self.R.CARRY
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.E = calc
         return 8
 
     def RL_CB14(self):
         """RL H"""
-        self.R.H = self.RL_R8(self.R.H)
+        carryBit = self.R.H >> 7
+        calc = (self.R.H << 1) & 0b11111110 | self.R.CARRY
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.H = calc
         return 8
 
     def RL_CB15(self):
         """RL L"""
-        self.R.L = self.RL_R8(self.R.L)
+        carryBit = self.R.L >> 7
+        calc = (self.R.L << 1) & 0b11111110 | self.R.CARRY
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.L = calc
         return 8
 
     def RL_CB16(self):
         """RL [HL]"""
-        self.mmu.set_memory(self.R.HL, self.RL_R8(self.mmu.get_memory(self.R.HL)))
+        mem = self.mmu.get_memory(self.R.HL)
+        carryBit = mem >> 7
+        calc = (mem << 1) & 0b11111110 | self.R.CARRY
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.mmu.set_memory(self.R.HL, calc)
         return 16
 
     def RL_CB17(self):
         """RL A"""
-        self.R.A = self.RL_R8(self.R.A)
-        return 8
-
-    def RR_R8(self, register):
-        initial = register
-        carryBit = initial & 1
-        calc = (self.R.CARRY << 7) | initial >> 1
-
+        carryBit = self.R.A >> 7
+        calc = (self.R.A << 1) & 0b11111110 | self.R.CARRY
         self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
-        return calc
+        self.R.A = calc
+        return 8
 
     def RR_CB18(self):
         """RR B"""
-        self.R.B = self.RR_R8(self.R.B)
+        carryBit = self.R.B & 1
+        calc = (self.R.CARRY << 7) | self.R.B >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.B = calc
         return 8
 
     def RR_CB19(self):
         """RR C"""
-        self.R.C = self.RR_R8(self.R.C)
+        carryBit = self.R.C & 1
+        calc = (self.R.CARRY << 7) | self.R.C >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.C = calc
         return 8
 
     def RR_CB1A(self):
         """RR D"""
-        self.R.D = self.RR_R8(self.R.D)
+        carryBit = self.R.D & 1
+        calc = (self.R.CARRY << 7) | self.R.D >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.D = calc
         return 8
 
     def RR_CB1B(self):
         """RR E"""
-        self.R.E = self.RR_R8(self.R.E)
+        carryBit = self.R.E & 1
+        calc = (self.R.CARRY << 7) | self.R.E >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.E = calc
         return 8
 
     def RR_CB1C(self):
         """RR H"""
-        self.R.H = self.RR_R8(self.R.H)
+        carryBit = self.R.H & 1
+        calc = (self.R.CARRY << 7) | self.R.H >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.H = calc
         return 8
 
     def RR_CB1D(self):
         """RR L"""
-        self.R.L = self.RR_R8(self.R.L)
+        carryBit = self.R.L & 1
+        calc = (self.R.CARRY << 7) | self.R.L >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.L = calc
         return 8
 
     def RR_CB1E(self):
         """RR [HL]"""
-        self.mmu.set_memory(self.R.HL, self.RR_R8(self.mmu.get_memory(self.R.HL)))
+        mem = self.mmu.get_memory(self.R.HL)
+        carryBit = mem & 1
+        calc = (self.R.CARRY << 7) | mem >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.mmu.set_memory(self.R.HL, calc)
         return 16
 
     def RR_CB1F(self):
         """RR A"""
-        self.R.A = self.RR_R8(self.R.A)
-        return 8
-
-    def SLA_R8(self, register):
-        initial = register
-        carryBit = initial >> 7
-        calc = (initial << 1) & 0b11111110
+        carryBit = self.R.A & 1
+        calc = (self.R.CARRY << 7) | self.R.A >> 1
         self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
-        return calc
+        self.R.A = calc
+        return 8
 
     def SLA_CB20(self):
         """SLA B"""
-        self.R.B = self.SLA_R8(self.R.B)
+        carryBit = self.R.B >> 7
+        calc = (self.R.B << 1) & 0b11111110
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.B = calc
         return 8
 
     def SLA_CB21(self):
         """SLA C"""
-        self.R.C = self.SLA_R8(self.R.C)
+        carryBit = self.R.C >> 7
+        calc = (self.R.C << 1) & 0b11111110
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.C = calc
         return 8
 
     def SLA_CB22(self):
         """SLA D"""
-        self.R.D = self.SLA_R8(self.R.D)
+        carryBit = self.R.D >> 7
+        calc = (self.R.D << 1) & 0b11111110
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.D = calc
         return 8
 
     def SLA_CB23(self):
         """SLA E"""
-        self.R.E = self.SLA_R8(self.R.E)
+        carryBit = self.R.E >> 7
+        calc = (self.R.E << 1) & 0b11111110
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.E = calc
         return 8
 
     def SLA_CB24(self):
         """SLA H"""
-        self.R.H = self.SLA_R8(self.R.H)
+        carryBit = self.R.H >> 7
+        calc = (self.R.H << 1) & 0b11111110
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.H = calc
         return 8
 
     def SLA_CB25(self):
         """SLA L"""
-        self.R.L = self.SLA_R8(self.R.L)
+        carryBit = self.R.L >> 7
+        calc = (self.R.L << 1) & 0b11111110
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.L = calc
         return 8
 
     def SLA_CB26(self):
         """SLA [HL]"""
-        self.mmu.set_memory(self.R.HL, self.SLA_R8(self.mmu.get_memory(self.R.HL)))
+        mem = self.mmu.get_memory(self.R.HL)
+        carryBit = mem >> 7
+        calc = (mem << 1) & 0b11111110
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.mmu.set_memory(self.R.HL, calc)
         return 16
 
     def SLA_CB27(self):
         """SLA A"""
-        self.R.A = self.SLA_R8(self.R.A)
-        return 8
-
-    def SRA_R8(self, register):
-        initial = register
-        carryBit = initial & 1
-        calc = (initial >> 7) << 7 | initial >> 1
-
+        carryBit = self.R.A >> 7
+        calc = (self.R.A << 1) & 0b11111110
         self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
-        return calc
+        self.R.A = calc
+        return 8
 
     def SRA_CB28(self):
         """SRA B"""
-        self.R.B = self.SRA_R8(self.R.B)
+        carryBit = self.R.B & 1
+        calc = (self.R.B >> 7) << 7 | self.R.B >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.B = calc
         return 8
 
     def SRA_CB29(self):
         """SRA C"""
-        self.R.C = self.SRA_R8(self.R.C)
-        return 8
-
-    def SRA_CB2A(self):
-        """SRA D"""
-        self.R.D = self.SRA_R8(self.R.D)
-        return 8
-
-    def SRA_CB2B(self):
-        """SRA E"""
-        self.R.E = self.SRA_R8(self.R.E)
-        return 8
-
-    def SRA_CB2C(self):
-        """SRA H"""
-        self.R.H = self.SRA_R8(self.R.H)
-        return 8
-
-    def SRA_CB2D(self):
-        """SRA L"""
-        self.R.L = self.SRA_R8(self.R.L)
-        return 8
-
-    def SRA_CB2E(self):
-        """SRA [HL]"""
-        self.mmu.set_memory(self.R.HL, self.SRA_R8(self.mmu.get_memory(self.R.HL)))
-        return 16
-
-    def SRA_CB2F(self):
-        """SRA A"""
-        self.R.A = self.SRA_R8(self.R.A)
-        return 8
-
-    def SWAP_R8(self, register):
-        initial = register
-        calc = (initial & 0b1111) << 4 | (initial >> 4)
-        self.R.ZERO = (calc == 0) & 1
-        self.R.SUBTRACTION = 0
-        self.R.HALFCARRY = 0
-        self.R.CARRY = 0
-        return calc
-
-    def SWAP_CB30(self):
-        """SWAP B"""
-        self.R.B = self.SWAP_R8(self.R.B)
-        return 8
-
-    def SWAP_CB31(self):
-        """SWAP C"""
-        self.R.C = self.SWAP_R8(self.R.C)
-        return 8
-
-    def SWAP_CB32(self):
-        """SWAP D"""
-        self.R.D = self.SWAP_R8(self.R.D)
-        return 8
-
-    def SWAP_CB33(self):
-        """SWAP E"""
-        self.R.E = self.SWAP_R8(self.R.E)
-        return 8
-
-    def SWAP_CB34(self):
-        """SWAP H"""
-        self.R.H = self.SWAP_R8(self.R.H)
-        return 8
-
-    def SWAP_CB35(self):
-        """SWAP L"""
-        self.R.L = self.SWAP_R8(self.R.L)
-        return 8
-
-    def SWAP_CB36(self):
-        """SWAP [HL]"""
-        self.mmu.set_memory(self.R.HL, self.SWAP_R8(self.mmu.get_memory(self.R.HL)))
-        return 16
-
-    def SWAP_CB37(self):
-        """SWAP A"""
-        self.R.A = self.SWAP_R8(self.R.A)
-        return 8
-
-    def SRL_R8(self, register):
-        initial = register
-        carryBit = initial & 1
-        calc = initial >> 1 & 0b011111111
-
+        carryBit = self.R.C & 1
+        calc = (self.R.C >> 7) << 7 | self.R.C >> 1
         self.R.ZERO = (calc == 0) & 1
         self.R.SUBTRACTION = 0
         self.R.HALFCARRY = 0
         self.R.CARRY = carryBit
-        return calc
+        self.R.C = calc
+        return 8
+
+    def SRA_CB2A(self):
+        """SRA D"""
+        carryBit = self.R.D & 1
+        calc = (self.R.D >> 7) << 7 | self.R.D >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.D = calc
+        return 8
+
+    def SRA_CB2B(self):
+        """SRA E"""
+        carryBit = self.R.E & 1
+        calc = (self.R.E >> 7) << 7 | self.R.E >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.E = calc
+        return 8
+
+    def SRA_CB2C(self):
+        """SRA H"""
+        carryBit = self.R.H & 1
+        calc = (self.R.H >> 7) << 7 | self.R.H >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.H = calc
+        return 8
+
+    def SRA_CB2D(self):
+        """SRA L"""
+        carryBit = self.R.L & 1
+        calc = (self.R.L >> 7) << 7 | self.R.L >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.L = calc
+        return 8
+
+    def SRA_CB2E(self):
+        """SRA [HL]"""
+        mem = self.mmu.get_memory(self.R.HL)
+        carryBit = mem & 1
+        calc = (mem >> 7) << 7 | mem >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.mmu.set_memory(self.R.HL, calc)
+        return 16
+
+    def SRA_CB2F(self):
+        """SRA A"""
+        carryBit = self.R.A & 1
+        calc = (self.R.A >> 7) << 7 | self.R.A >> 1
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.A = calc
+        return 8
+
+    def SWAP_CB30(self):
+        """SWAP B"""
+        calc = (self.R.B & 0b1111) << 4 | (self.R.B >> 4)
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        self.R.B = calc
+        return 8
+
+    def SWAP_CB31(self):
+        """SWAP C"""
+        calc = (self.R.C & 0b1111) << 4 | (self.R.C >> 4)
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        self.R.C = calc
+        return 8
+
+    def SWAP_CB32(self):
+        """SWAP D"""
+        calc = (self.R.D & 0b1111) << 4 | (self.R.D >> 4)
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        self.R.D = calc
+        return 8
+
+    def SWAP_CB33(self):
+        """SWAP E"""
+        calc = (self.R.E & 0b1111) << 4 | (self.R.E >> 4)
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        self.R.E = calc
+        return 8
+
+    def SWAP_CB34(self):
+        """SWAP H"""
+        calc = (self.R.H & 0b1111) << 4 | (self.R.H >> 4)
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        self.R.H = calc
+        return 8
+
+    def SWAP_CB35(self):
+        """SWAP L"""
+        calc = (self.R.L & 0b1111) << 4 | (self.R.L >> 4)
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        self.R.L = calc
+        return 8
+
+    def SWAP_CB36(self):
+        """SWAP [HL]"""
+        mem = self.mmu.get_memory(self.R.HL)
+        calc = (mem & 0b1111) << 4 | (mem >> 4)
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        self.mmu.set_memory(self.R.HL, calc)
+        return 16
+
+    def SWAP_CB37(self):
+        """SWAP A"""
+        calc = (self.R.A & 0b1111) << 4 | (self.R.A >> 4)
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = 0
+        self.R.A = calc
+        return 8
 
     def SRL_CB38(self):
         """SRL B"""
-        self.R.B = self.SRL_R8(self.R.B)
+        carryBit = self.R.B & 1
+        calc = self.R.B >> 1 & 0b011111111
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.B = calc
         return 8
 
     def SRL_CB39(self):
         """SRL C"""
-        self.R.C = self.SRL_R8(self.R.C)
+        carryBit = self.R.C & 1
+        calc = self.R.C >> 1 & 0b011111111
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.C = calc
         return 8
 
     def SRL_CB3A(self):
         """SRL D"""
-        self.R.D = self.SRL_R8(self.R.D)
+        carryBit = self.R.D & 1
+        calc = self.R.D >> 1 & 0b011111111
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.D = calc
         return 8
 
     def SRL_CB3B(self):
         """SRL E"""
-        self.R.E = self.SRL_R8(self.R.E)
+        carryBit = self.R.E & 1
+        calc = self.R.E >> 1 & 0b011111111
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.E = calc
         return 8
 
     def SRL_CB3C(self):
         """SRL H"""
-        self.R.H = self.SRL_R8(self.R.H)
+        carryBit = self.R.H & 1
+        calc = self.R.H >> 1 & 0b011111111
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.H = calc
         return 8
 
     def SRL_CB3D(self):
         """SRL L"""
-        self.R.L = self.SRL_R8(self.R.L)
+        carryBit = self.R.L & 1
+        calc = self.R.L >> 1 & 0b011111111
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.L = calc
         return 8
 
     def SRL_CB3E(self):
         """SRL [HL]"""
-        self.mmu.set_memory(self.R.HL, self.SRL_R8(self.mmu.get_memory(self.R.HL)))
+        mem = self.mmu.get_memory(self.R.HL)
+        carryBit = mem & 1
+        calc = mem >> 1 & 0b011111111
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.mmu.set_memory(self.R.HL, calc)
         return 16
 
     def SRL_CB3F(self):
         """SRL A"""
-        self.R.A = self.SRL_R8(self.R.A)
+        carryBit = self.R.A & 1
+        calc = self.R.A >> 1 & 0b011111111
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 0
+        self.R.CARRY = carryBit
+        self.R.A = calc
         return 8
 
     def BIT_U3R8(self, register, value):
@@ -3864,7 +4417,17 @@ class Opcodes:
 
     def ADC_CE(self, value):
         """ADC A, n8"""
-        self.ADC_A_N8(value)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial + value + carryBit
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = (
+            (initial & 0xF) + (value & 0xF) + (carryBit & 0xF) > 0xF
+        ) & 1
+        self.R.CARRY = (calc > 0xFF) & 1
         return 8
 
     def RST_CF(self):
@@ -3906,7 +4469,14 @@ class Opcodes:
 
     def SUB_D6(self, value):
         """SUB A, n8"""
-        self.SUB_A_N8(value)
+        initial = self.R.A
+        calc = initial - value
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = ((initial & 0xF) - (value & 0xF) < 0) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 8
 
     def RST_D7(self):
@@ -3944,7 +4514,17 @@ class Opcodes:
 
     def SBC_DE(self, value):
         """SBC A, n8"""
-        self.SBC_A_N8(value)
+        initial = self.R.A
+        carryBit = self.R.CARRY
+        calc = initial - (value + carryBit)
+        final = calc & 0xFF
+        self.R.A = final
+        self.R.ZERO = (final == 0) & 1
+        self.R.SUBTRACTION = 1
+        self.R.HALFCARRY = (
+            (initial & 0xF) - ((value & 0xF) + (carryBit & 0xF)) < 0
+        ) & 1
+        self.R.CARRY = (calc < 0) & 1
         return 8
 
     def RST_DF(self):
@@ -3974,7 +4554,13 @@ class Opcodes:
 
     def AND_E6(self, value):
         """AND A, n8"""
-        self.AND_A_N8(value)
+        initial = self.R.A
+        calc = initial & value
+        self.R.A = calc
+        self.R.ZERO = (calc == 0) & 1
+        self.R.SUBTRACTION = 0
+        self.R.HALFCARRY = 1
+        self.R.CARRY = 0
         return 8
 
     def RST_E7(self):
