@@ -55,8 +55,8 @@ class PPU:
         )
 
         pygame.init()
+        self.CYCLE_COUNTER = 0
 
-        self.FPS_COUNTER = 0
         self.CANVAS = pygame.display.set_mode(self.CANVAS_SIZE)
         pygame.display.set_caption("FPS: 0")
 
@@ -184,7 +184,6 @@ class PPU:
                             if self._LY > 153:
                                 self._MODE = 2
                                 self._LY = 0
-                                self.FPS_COUNTER += 1
                                 pygame.display.flip()
                 self._CLOCK += 1
         else:

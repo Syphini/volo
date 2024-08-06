@@ -50,9 +50,9 @@ lastTime = 0
 try:
     while True:
         if pygame.time.get_ticks() - lastTime >= 1000:
-            pygame.display.set_caption(f"FPS: {mmu.IO.LCD.FPS_COUNTER}")
+            print(f"CYCLES: {mmu.IO.LCD.CYCLE_COUNTER}")
             lastTime = pygame.time.get_ticks()
-            mmu.IO.LCD.FPS_COUNTER = 0
+            mmu.IO.LCD.CYCLE_COUNTER = 0
 
         # region Events
         for event in pygame.event.get():
@@ -132,6 +132,7 @@ try:
 
         cycles = opcodes.execute(PC_DATA, CB_FLAG)
         mmu.IO.tick(cycles)
+        mmu.IO.LCD.CYCLE_COUNTER += 1
 
 
 # endregion
