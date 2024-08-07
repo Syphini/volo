@@ -115,22 +115,20 @@ try:
 
         PC_DATA = mmu.get_memory(R.PC)
 
-        CB_FLAG = False
         if PC_DATA == 0xCB:
-            CB_FLAG = True
-            PC_DATA = mmu.get_memory(R.PC + 1)
+            PC_DATA = mmu.get_memory(R.PC + 1) + 0x100
             R.PC += 1
 
         # region DEBUG
         if OP_DEBUG:
             print(
                 helpers.formatted_hex(R.PC),
-                helpers.formatted_hex(PC_DATA + 0xCB00 if CB_FLAG else PC_DATA),
+                helpers.formatted_hex(PC_DATA),
             )
             R.debug()
         # endregion
 
-        cycles = opcodes.execute(PC_DATA, CB_FLAG)
+        cycles = opcodes.execute(PC_DATA)
         mmu.IO.tick(cycles)
         mmu.IO.LCD.CYCLE_COUNTER += 1
 
