@@ -6,3 +6,11 @@ First try at a GameBoy emulator
 * Fix graphical issues
 * Remaining MBC's
 * Audio
+
+## Build
+
+`mypyc pyvologb --strict`
+
+## Run
+
+`py main.py`

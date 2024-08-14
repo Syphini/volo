@@ -1,6 +1,6 @@
-import helpers
-from mmu import MMU
-from registers import Registers
+from pyvologb.helpers import formatted_hex
+from pyvologb.mmu import MMU
+from pyvologb.registers import Registers
 
 
 class Opcodes:
@@ -427,9 +427,7 @@ class Opcodes:
             case 0xCA:
                 return self.JP_CA(self.read_bytes(2))
             case 0xCB:
-                raise Exception(
-                    f"Invalid Execution Order: {helpers.formatted_hex(opcode)}"
-                )
+                raise Exception(f"Invalid Execution Order: {formatted_hex(opcode)}")
             case 0xCC:
                 return self.CALL_CC(self.read_bytes(2))
             case 0xCD:
@@ -445,7 +443,7 @@ class Opcodes:
             case 0xD2:
                 return self.JP_D2(self.read_bytes(2))
             case 0xD3:
-                raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
+                raise Exception(f"Illegal Opcode: {formatted_hex(opcode)}")
             case 0xD4:
                 return self.CALL_D4(self.read_bytes(2))
             case 0xD5:
@@ -461,11 +459,11 @@ class Opcodes:
             case 0xDA:
                 return self.JP_DA(self.read_bytes(2))
             case 0xDB:
-                raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
+                raise Exception(f"Illegal Opcode: {formatted_hex(opcode)}")
             case 0xDC:
                 return self.CALL_DC(self.read_bytes(2))
             case 0xDD:
-                raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
+                raise Exception(f"Illegal Opcode: {formatted_hex(opcode)}")
             case 0xDE:
                 return self.SBC_DE(self.read_bytes(1))
             case 0xDF:
@@ -477,9 +475,9 @@ class Opcodes:
             case 0xE2:
                 return self.LDH_E2()
             case 0xE3:
-                raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
+                raise Exception(f"Illegal Opcode: {formatted_hex(opcode)}")
             case 0xE4:
-                raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
+                raise Exception(f"Illegal Opcode: {formatted_hex(opcode)}")
             case 0xE5:
                 return self.PUSH_E5()
             case 0xE6:
@@ -493,11 +491,11 @@ class Opcodes:
             case 0xEA:
                 return self.LD_EA(self.read_bytes(2))
             case 0xEB:
-                raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
+                raise Exception(f"Illegal Opcode: {formatted_hex(opcode)}")
             case 0xEC:
-                raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
+                raise Exception(f"Illegal Opcode: {formatted_hex(opcode)}")
             case 0xED:
-                raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
+                raise Exception(f"Illegal Opcode: {formatted_hex(opcode)}")
             case 0xEE:
                 return self.XOR_EE(self.read_bytes(1))
             case 0xEF:
@@ -511,7 +509,7 @@ class Opcodes:
             case 0xF3:
                 return self.DI_F3()
             case 0xF4:
-                raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
+                raise Exception(f"Illegal Opcode: {formatted_hex(opcode)}")
             case 0xF5:
                 return self.PUSH_F5()
             case 0xF6:
@@ -527,9 +525,9 @@ class Opcodes:
             case 0xFB:
                 return self.EI_FB()
             case 0xFC:
-                raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
+                raise Exception(f"Illegal Opcode: {formatted_hex(opcode)}")
             case 0xFD:
-                raise Exception(f"Illegal Opcode: {helpers.formatted_hex(opcode)}")
+                raise Exception(f"Illegal Opcode: {formatted_hex(opcode)}")
             case 0xFE:
                 return self.CP_FE(self.read_bytes(1))
             case 0xFF:
@@ -1047,7 +1045,7 @@ class Opcodes:
             case 0x1FF:
                 return self.SET_CBFF()
             case _:
-                raise Exception(f"Unknown Instruction: {helpers.formatted_hex(opcode)}")
+                raise Exception(f"Unknown Instruction: {formatted_hex(opcode)}")
 
     def NOP_00(self) -> int:
         """NOP"""

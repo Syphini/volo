@@ -1,10 +1,10 @@
 import pygame
-import helpers
+from pyvologb.helpers import formatted_hex
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from mmu import MMU
+    from pyvologb.mmu import MMU
 
 
 class PPU:
@@ -113,7 +113,7 @@ class PPU:
             case 0xFF4B:
                 return self.WX
             case _:
-                raise Exception("Unknown IO Register:", helpers.formatted_hex(addr))
+                raise Exception("Unknown IO Register:", formatted_hex(addr))
 
     def set(self, addr: int, value: int) -> None:
         match addr:
@@ -142,7 +142,7 @@ class PPU:
             case 0xFF4B:
                 self.WX = value
             case _:
-                raise Exception("Unknown IO Register:", helpers.formatted_hex(addr))
+                raise Exception("Unknown IO Register:", formatted_hex(addr))
 
     # Tilemap 1 9800 -> 9BFF
     # Tilemap 2 9C00 -> 9FFF

@@ -1,5 +1,5 @@
-import helpers
-from mmu import MMU
+from pyvologb.helpers import formatted_hex
+from pyvologb.mmu import MMU
 
 
 class Registers:
@@ -105,7 +105,7 @@ class Registers:
             "PC": self.PC,
             "SP": self.SP,
         }
-        print([{c: helpers.formatted_hex(data[c])} for c in data])
+        print([{c: formatted_hex(data[c])} for c in data])
         print(
             {
                 "Z": self.ZERO,

@@ -1,8 +1,8 @@
 import os
 import pygame
-import helpers
-from cartridge import Cartridge
-from ppu import PPU
+from pyvologb.helpers import formatted_hex
+from pyvologb.cartridge import Cartridge
+from pyvologb.ppu import PPU
 
 
 class MMU:
@@ -42,7 +42,7 @@ class MMU:
 
         self.switch_rom_bank(1)
 
-        print(self.CARTRIDGE.HEADER.title)
+        # print(self.CARTRIDGE.HEADER.title)
 
     def switch_rom_bank(self, bank: int) -> None:
         match bank:
@@ -82,7 +82,7 @@ class MMU:
             case 0xFFFF:
                 return self.IO.IE.get()
             case _:
-                raise Exception("Inaccessible Memory:", helpers.formatted_hex(address))
+                raise Exception("Inaccessible Memory:", formatted_hex(address))
 
     def set_memory(self, address: int, value: int) -> None:
         match address:
@@ -115,11 +115,13 @@ class MMU:
             case 0xFFFF:
                 self.IO.IE.set(value)
             case _:
-                raise Exception("Inaccessible Memory:", helpers.formatted_hex(address))
+                raise Exception("Inaccessible Memory:", formatted_hex(address))
 
     def dump(self) -> None:
         # Hex Dump
-        with open("GB\\ROM\\dump.md", "w") as f:
+        with open(
+            os.path.join(os.path.dirname(self.CARTRIDGE.ROM_PATH), "dump.txt"), "w"
+        ) as f:
             dump = bytearray.hex(
                 self.ROM1
                 + self.ROM2
@@ -136,7 +138,7 @@ class MMU:
             ).upper()
             n = 48
             data = [
-                f"{helpers.formatted_hex(i//3)} -- {dump[i:i+n]
+                f"{formatted_hex(i//3)} -- {dump[i:i+n]
                                              }"
                 for i in range(0, len(dump), n)
             ]
@@ -185,21 +187,21 @@ class IO:
             case 0xFF00:
                 return self.JOYP.get()
             case addr if 0xFF01 <= addr <= 0xFF02:
-                print("TODO handle serial", helpers.formatted_hex(address))
+                print("TODO handle serial", formatted_hex(address))
                 return 0xFF
             case addr if 0xFF04 <= addr <= 0xFF07:
                 return self._TIMER.get(addr)
             case 0xFF0F:
                 return self.IF.get()
             case addr if 0xFF10 <= addr <= 0xFF26:
-                print("TODO handle audio registers", helpers.formatted_hex(address))
+                print("TODO handle audio registers", formatted_hex(address))
                 return 0xFF
             case addr if 0xFF30 <= addr <= 0xFF3F:
                 return self.WAVE[address - 0xFF30]
             case addr if 0xFF40 <= addr <= 0xFF4B:
                 return self.LCD.get(addr)
             case _:
-                print(f"Ignoring IO Address GET: {helpers.formatted_hex(address)}")
+                print(f"Ignoring IO Address GET: {formatted_hex(address)}")
                 return 0xFF
 
     def set(self, address: int, value: int) -> None:
@@ -207,13 +209,13 @@ class IO:
             case 0xFF00:
                 self.JOYP.set(value)
             case addr if 0xFF01 <= addr <= 0xFF02:
-                print("TODO handle serial", helpers.formatted_hex(address))
+                print("TODO handle serial", formatted_hex(address))
             case addr if 0xFF04 <= addr <= 0xFF07:
                 self._TIMER.set(addr, value)
             case 0xFF0F:
                 self.IF.set(value)
             case addr if 0xFF10 <= addr <= 0xFF26:
-                print("TODO handle audio registers", helpers.formatted_hex(address))
+                print("TODO handle audio registers", formatted_hex(address))
             case addr if 0xFF30 <= addr <= 0xFF3F:
                 self.WAVE[address - 0xFF30] = value
             case addr if 0xFF40 <= addr <= 0xFF4B:
@@ -224,7 +226,7 @@ class IO:
                     self.MMU.switch_rom_bank(0)
             case _:
                 print(
-                    f"Ignoring IO Address SET: {helpers.formatted_hex(address)} {helpers.formatted_hex(value)}"
+                    f"Ignoring IO Address SET: {formatted_hex(address)} {formatted_hex(value)}"
                 )
 
     def tick(self, cycles: int) -> None:
