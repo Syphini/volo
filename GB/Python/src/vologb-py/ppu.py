@@ -1,14 +1,19 @@
 import pygame
 import helpers
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mmu import MMU
+
 
 class PPU:
-    def __init__(self, mmu):
+    def __init__(self, mmu: "MMU") -> None:
         self.mmu = mmu
 
         self.LCDC = Control_Bits(0x91)  # FF40
         self.STAT = Control_Bits(0x85)  # FF41
-        self.SCY = 0x00  # FF42
+        self.SCY = 0x00  # FF42F
         self.SCX = 0x00  # FF43
         self._LY = 0x00  # FF44 -- read-only
         self.LYC = 0x00  # FF45
@@ -33,16 +38,16 @@ class PPU:
         self.init_pygame()
 
     @property
-    def DMA(self):
+    def DMA(self) -> int:
         return 0x0
 
     @DMA.setter
-    def DMA(self, value):
+    def DMA(self, value: int) -> None:
         for i in range(0xA0):
             source_mem = self.mmu.get_memory(value << 8 | i)
             self.mmu.set_memory(0xFE00 + i, source_mem)
 
-    def init_pygame(self):
+    def init_pygame(self) -> None:
         self.PIXEL_SIZE = 3
         self.TILE_SIZE = 1
         # 160 x 144 screen size
@@ -63,7 +68,7 @@ class PPU:
         self.clear_display()
         pygame.display.flip()
 
-    def dump(self):
+    def dump(self) -> bytearray:
         return bytearray(
             [
                 self.LCDC.get(),
@@ -81,7 +86,7 @@ class PPU:
             ]
         )
 
-    def get(self, addr):
+    def get(self, addr: int) -> int:
         match addr:
             case 0xFF40:
                 return self.LCDC.get()
@@ -110,7 +115,7 @@ class PPU:
             case _:
                 raise Exception("Unknown IO Register:", helpers.formatted_hex(addr))
 
-    def set(self, addr, value):
+    def set(self, addr: int, value: int) -> None:
         match addr:
             case 0xFF40:
                 self.LCDC.set(value)
@@ -142,7 +147,7 @@ class PPU:
     # Tilemap 1 9800 -> 9BFF
     # Tilemap 2 9C00 -> 9FFF
 
-    def tick(self, cycles: int):
+    def tick(self, cycles: int) -> None:
         if self.LCDC.BIT_7 == 1:
             for _ in range(cycles):
 
@@ -191,7 +196,9 @@ class PPU:
             self._CLOCK = 0
             self.clear_display()
 
-    def get_tile_colours(self, tile_bytes: bytearray, tileY, attributes: int = None):
+    def get_tile_colours(
+        self, tile_bytes: bytearray, tileY: int, attributes: int = 0
+    ) -> list[int]:
         """Convert byte data into tile data"""
 
         # priority = 0
@@ -224,7 +231,7 @@ class PPU:
             for i in range(8)
         ]
 
-    def draw_oam_line(self):
+    def draw_oam_line(self) -> None:
         line = self._LY
 
         sprite_height = 8
@@ -255,7 +262,13 @@ class PPU:
             for lineX in range(8):
                 self.draw_pixel(x + lineX, line, colours[lineX], True)
 
-    def draw_pixel(self, x, y, colourId, transparent=False):
+    def draw_pixel(
+        self,
+        x: int,
+        y: int,
+        colourId: int,
+        transparent: bool = False,
+    ) -> None:
         """Draw pixel at (x,y)"""
         if transparent and colourId == 0:
             return
@@ -271,7 +284,7 @@ class PPU:
             ],
         )
 
-    def drawline(self):
+    def drawline(self) -> None:
         """Draw the current scanline"""
         # TODO make faster
         # aim: 40ms
@@ -297,7 +310,7 @@ class PPU:
                 scrollX = (x + xi - self.SCX) & 0xFF
                 self.draw_pixel(scrollX, y, colours[xi])
 
-    def clear_display(self):
+    def clear_display(self) -> None:
         """Clear the canvas"""
         self.CANVAS.fill(
             (255, 255, 255), pygame.Rect(0, 0, self.CANVAS_SIZE[0], self.CANVAS_SIZE[1])
@@ -305,10 +318,10 @@ class PPU:
 
 
 class Control_Bits:
-    def __init__(self, value):
+    def __init__(self, value: int) -> None:
         self.set(value)
 
-    def set(self, value):
+    def set(self, value: int) -> None:
         self.BIT_7 = value >> 7 & 1
         self.BIT_6 = value >> 6 & 1
         self.BIT_5 = value >> 5 & 1
@@ -318,7 +331,7 @@ class Control_Bits:
         self.BIT_1 = value >> 1 & 1
         self.BIT_0 = value & 1
 
-    def get(self):
+    def get(self) -> int:
         return (
             self.BIT_7 << 7
             | self.BIT_6 << 6

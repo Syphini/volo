@@ -1,7 +1,9 @@
+import argparse
 import cProfile
 import pstats
 import traceback
 import sys
+import typing
 import pygame
 import helpers
 from cartridge import Cartridge
@@ -11,26 +13,36 @@ from opcodes import Opcodes
 
 print()
 
+
+def parse_args(args: typing.List[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("rom")
+    parser.add_argument("-s", "--skip-boot", action="store_true", default=False)
+    return parser.parse_args(args)
+
+
+args = parse_args(sys.argv[1:])
+
 OP_DEBUG = False
-PROFILE_DEBUG = True
+PROFILE_DEBUG = False
 
 if PROFILE_DEBUG:
     profiler = cProfile.Profile()
     profiler.enable()
 
-ROM_FILE = "GB/ROM/cpu_instrs.gb"
+ROM_FILE = args.rom
 
 # region Registers
 
 cartridge = Cartridge(ROM_FILE)
-mmu = MMU(cartridge, use_boot_rom=True)
+mmu = MMU(cartridge, use_boot_rom=not args.skip_boot)
 R = Registers(mmu)
 opcodes = Opcodes(mmu, R)
 
 # endregion
 
 
-def dump(exception=None):
+def dump(exception: Exception | None = None) -> None:
     print("------")
     R.debug()
     print("------")

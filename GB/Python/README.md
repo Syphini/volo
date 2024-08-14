@@ -3,8 +3,6 @@
 First try at a GameBoy emulator
 
 ## TODO
-* Finalise CPU
-* Windows / Sprites
-* Memory Banks
+* Fix graphical issues
+* Remaining MBC's
 * Audio
-* Simple GUI

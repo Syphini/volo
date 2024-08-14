@@ -3,7 +3,7 @@ import struct
 
 
 class Cartridge:
-    def __init__(self, rom_path):
+    def __init__(self, rom_path: str) -> None:
 
         self.MEMORY_BANKS = []
 
@@ -14,17 +14,20 @@ class Cartridge:
         self.MBC_COUNT = len(self.MEMORY_BANKS)
 
         self.RAM_ENABLE = False
-        self.RAM_BANKS = []
+        # self.RAM_BANKS = []
 
         # Read Cartridge Header
         header_raw = self.MEMORY_BANKS[0][0x100:0x150]
         header_unpacked = struct.unpack("=xxxx48x15sBHBBBBBBBBH", header_raw)
-        self.HEADER = namedtuple(
+
+        # FIXME this won't compile properly
+        CartridgeHeader = namedtuple(
             "CartridgeHeader",
             "title cgb new_licensee_code sgb cartridge_type rom_size ram_size destination_code old_licensee_code mask_rom_version header_checksum global_checksum",
-        )._make(header_unpacked)
+        )
+        self.HEADER = CartridgeHeader(*header_unpacked)
 
-    def toggle_ram_enable(self, value):
+    def toggle_ram_enable(self, value: int) -> None:
         if (value & 0xF) == 0xA:
             self.RAM_ENABLE = True
         else:

@@ -1,124 +1,150 @@
+import os
 import pygame
 import helpers
+from cartridge import Cartridge
 from ppu import PPU
 
 
-class Registers:
-    def __init__(self, mmu):
+class MMU:
+    def __init__(self, cartridge: Cartridge, use_boot_rom: bool = False) -> None:
 
-        self.mmu = mmu
+        self.BOOT_ROM = "/lib/DMG_ROM.bin"
+        self.CARTRIDGE = cartridge
+        self.CURRENT_BANK = 0
+        self.USE_BOOT_ROM = use_boot_rom
 
-        self.A = 0x01
-        self.B = 0x00
-        self.C = 0x13
-        self.D = 0x00
-        self.E = 0xD8
-        self.H = 0x01
-        self.L = 0x4D
+        io = IO(self)
 
-        self.PC = (
-            0x0 if mmu.USE_BOOT_ROM else 0x100
-        )  # Boot ROM is 0x0; Cartridge is 0x100
-        self.SP = 0xFFFE
+        # ROM Memory is cartridge memory, and is therefore readonly unless there's an MBC chip
+        self.ROM1 = bytearray(0x4000)  # 0000 -> 3FFF
+        self.ROM2 = bytearray(0x4000)  # 4000 -> 7FFF
 
-        self.ZERO = 1
-        self.SUBTRACTION = 0
-        self.HALFCARRY = 1
-        self.CARRY = 1
+        # This memory is GB internal
+        self.VRAM = bytearray(0x2000)  # 8000 -> 9FFF
+        self.ERAM = bytearray(0x2000)  # A000 -> BFFF
+        self.WRAM = bytearray(0x2000)  # C000 -> DFFF
+        self.ECHO = bytearray(0x1E00)  # E000 -> FDFF
+        self.OAM = bytearray(0xA0)  # FE00 -> FE9F
+        self.EMPTY = bytearray(0x60)  # FEA0 -> FEFF
+        self.IO = io  # FF00 -> FF7F
+        self.HRAM = bytearray(0x7F)  # FF80 -> FFFE
 
-    @property
-    def F(self):
-        return (
-            self.ZERO << 7
-            | self.SUBTRACTION << 6
-            | self.HALFCARRY << 5
-            | self.CARRY << 4
-        )
+        self.IME = False
+        self.HALT = False
 
-    @property
-    def AF(self):
-        return self.A << 8 | self.F
+        self.switch_rom_bank(0)
 
-    @AF.setter
-    def AF(self, value: int):
-        self.A = value >> 8
-        self.ZERO = value >> 7 & 1
-        self.SUBTRACTION = value >> 6 & 1
-        self.HALFCARRY = value >> 5 & 1
-        self.CARRY = value >> 4 & 1
+        if self.USE_BOOT_ROM and self.IO.BANK == 0:
+            with open(
+                os.path.dirname(os.path.abspath(__file__)) + self.BOOT_ROM, "rb"
+            ) as f:
+                self.ROM1[0:0x100] = f.read()
 
-    @property
-    def BC(self):
-        return self.B << 8 | self.C
+        self.switch_rom_bank(1)
 
-    @BC.setter
-    def BC(self, value: int):
-        self.B = value >> 8
-        self.C = value & 0xFF
+        print(self.CARTRIDGE.HEADER.title)
 
-    @property
-    def DE(self):
-        return self.D << 8 | self.E
+    def switch_rom_bank(self, bank: int) -> None:
+        match bank:
+            case 0:
+                bank_data = self.CARTRIDGE.MEMORY_BANKS[0].copy()
+                self.ROM1 = bank_data
+            case _:
+                self.CURRENT_BANK = bank
+                bank_data = self.CARTRIDGE.MEMORY_BANKS[bank].copy()
+                self.ROM2 = bank_data
 
-    @DE.setter
-    def DE(self, value: int):
-        self.D = value >> 8
-        self.E = value & 0xFF
+    def switch_ram_bank(self, bank: int) -> None:
+        pass
 
-    @property
-    def HL(self):
-        return self.H << 8 | self.L
+    def get_memory(self, address: int) -> int:
+        match address:
+            case addr if 0x0000 <= addr <= 0x3FFF:
+                return self.ROM1[address]
+            case addr if 0x4000 <= addr <= 0x7FFF:
+                return self.ROM2[address - 0x4000]
+            case addr if 0x8000 <= addr <= 0x9FFF:
+                return self.VRAM[address - 0x8000]
+            case addr if 0xA000 <= addr <= 0xBFFF:
+                return self.ERAM[address - 0xA000]
+            case addr if 0xC000 <= addr <= 0xDFFF:
+                return self.WRAM[address - 0xC000]
+            case addr if 0xE000 <= addr <= 0xFDFF:
+                return self.ECHO[address - 0xE000]
+            case addr if 0xFE00 <= addr <= 0xFE9F:
+                return self.OAM[address - 0xFE00]
+            case addr if 0xFEA0 <= addr <= 0xFEFF:
+                return 0x00
+            case addr if 0xFF00 <= addr <= 0xFF7F:
+                return self.IO.get(address)
+            case addr if 0xFF80 <= addr <= 0xFFFE:
+                return self.HRAM[address - 0xFF80]
+            case 0xFFFF:
+                return self.IO.IE.get()
+            case _:
+                raise Exception("Inaccessible Memory:", helpers.formatted_hex(address))
 
-    @HL.setter
-    def HL(self, value: int):
-        self.H = value >> 8
-        self.L = value & 0xFF
+    def set_memory(self, address: int, value: int) -> None:
+        match address:
+            case addr if 0x0000 <= addr <= 0x1FFF:
+                self.CARTRIDGE.toggle_ram_enable(value)
+            case addr if 0x2000 <= addr <= 0x3FFF:
+                self.switch_rom_bank((value & 0x1F) & (self.CARTRIDGE.MBC_COUNT - 1))
+            case addr if 0x4000 <= addr <= 0x5FFF:
+                print("TODO RAM Bank Number")
+                pass
+            case addr if 0x6000 <= addr <= 0x7FFF:
+                print("TODO Banking Mode Select")
+                pass
+            case addr if 0x8000 <= addr <= 0x9FFF:
+                self.VRAM[address - 0x8000] = value
+            case addr if 0xA000 <= addr <= 0xBFFF:
+                self.ERAM[address - 0xA000] = value
+            case addr if 0xC000 <= addr <= 0xDFFF:
+                self.WRAM[address - 0xC000] = value
+            case addr if 0xE000 <= addr <= 0xFDFF:
+                self.ECHO[address - 0xE000] = value
+            case addr if 0xFE00 <= addr <= 0xFE9F:
+                self.OAM[address - 0xFE00] = value
+            case addr if 0xFEA0 <= addr <= 0xFEFF:
+                pass  # ignore memory here??
+            case addr if 0xFF00 <= addr <= 0xFF7F:
+                self.IO.set(address, value)
+            case addr if 0xFF80 <= addr <= 0xFFFE:
+                self.HRAM[address - 0xFF80] = value
+            case 0xFFFF:
+                self.IO.IE.set(value)
+            case _:
+                raise Exception("Inaccessible Memory:", helpers.formatted_hex(address))
 
-    def PUSH(self, value: int):
-        self.SP = (self.SP - 1) & 0xFFFF
-        self.mmu.set_memory(self.SP, value >> 8)
-
-        self.SP = (self.SP - 1) & 0xFFFF
-        self.mmu.set_memory(self.SP, value & 0xFF)
-
-    def POP(self):
-        lower = self.mmu.get_memory(self.SP)
-        self.SP = (self.SP + 1) & 0xFFFF
-
-        higher = self.mmu.get_memory(self.SP)
-        self.SP = (self.SP + 1) & 0xFFFF
-
-        return higher << 8 | lower
-
-    def debug(self):
-        data = {
-            "A": self.A,
-            "B": self.B,
-            "C": self.C,
-            "D": self.D,
-            "E": self.E,
-            "F": self.ZERO << 7
-            | self.SUBTRACTION << 6
-            | self.HALFCARRY << 5
-            | self.CARRY << 4,
-            "H": self.H,
-            "L": self.L,
-            "PC": self.PC,
-            "SP": self.SP,
-        }
-        print([{c: helpers.formatted_hex(data[c])} for c in data])
-        print(
-            {
-                "Z": self.ZERO,
-                "N": self.SUBTRACTION,
-                "H": self.HALFCARRY,
-                "C": self.CARRY,
-            }
-        )
+    def dump(self) -> None:
+        # Hex Dump
+        with open("GB\\ROM\\dump.md", "w") as f:
+            dump = bytearray.hex(
+                self.ROM1
+                + self.ROM2
+                + self.VRAM
+                + self.ERAM
+                + self.WRAM
+                + self.ECHO
+                + self.OAM
+                + self.EMPTY
+                + self.IO.dump()
+                + self.HRAM
+                + bytearray([self.IO.IE.get()]),
+                " ",
+            ).upper()
+            n = 48
+            data = [
+                f"{helpers.formatted_hex(i//3)} -- {dump[i:i+n]
+                                             }"
+                for i in range(0, len(dump), n)
+            ]
+            f.write("\n".join(data))
 
 
 class IO:
-    def __init__(self, mmu):
+    def __init__(self, mmu: MMU) -> None:
 
         self.MMU = mmu
 
@@ -154,7 +180,7 @@ class IO:
         self.BANK = (not mmu.USE_BOOT_ROM) & 1  # FF50
         self.IE = Interrupts()  # FFFF
 
-    def get(self, address):
+    def get(self, address: int) -> int:
         match address:
             case 0xFF00:
                 return self.JOYP.get()
@@ -176,7 +202,7 @@ class IO:
                 print(f"Ignoring IO Address GET: {helpers.formatted_hex(address)}")
                 return 0xFF
 
-    def set(self, address, value):
+    def set(self, address: int, value: int) -> None:
         match address:
             case 0xFF00:
                 self.JOYP.set(value)
@@ -201,11 +227,11 @@ class IO:
                     f"Ignoring IO Address SET: {helpers.formatted_hex(address)} {helpers.formatted_hex(value)}"
                 )
 
-    def tick(self, cycles):
+    def tick(self, cycles: int) -> None:
         self._TIMER.tick(cycles)
         self.LCD.tick(cycles)
 
-    def dump(self):
+    def dump(self) -> bytearray:
         data = bytearray(
             [
                 self.JOYP.get(),
@@ -268,7 +294,7 @@ class IO:
 
 
 class Timer:
-    def __init__(self, IO: IO):
+    def __init__(self, IO: IO) -> None:
 
         self.IO = IO
 
@@ -287,24 +313,24 @@ class Timer:
         self.CLOCK = 0
 
     @property
-    def TAC(self):
+    def TAC(self) -> int:
         return 0xF << 4 | 1 << 3 | self._TAC_ENABLE << 2 | self._TAC_CLOCK_SELECT
 
     @TAC.setter
-    def TAC(self, value):
+    def TAC(self, value: int) -> None:
         self._TAC_ENABLE = value >> 2
         self._TAC_CLOCK_SELECT = value & 0x3
         self.reset_clock()
 
     @property
-    def DIV(self):
+    def DIV(self) -> int:
         return self._DIVIDER >> 8
 
     @DIV.setter
-    def DIV(self, _):
+    def DIV(self, _: int) -> None:
         self._DIVIDER = 0x0
 
-    def get(self, address):
+    def get(self, address: int) -> int:
         match address:
             case 0xFF04:
                 return self.DIV
@@ -314,8 +340,9 @@ class Timer:
                 return self.TMA
             case 0xFF07:
                 return self.TAC
+        return 0xFF
 
-    def set(self, address, value):
+    def set(self, address: int, value: int) -> None:
         match address:
             case 0xFF04:
                 self.DIV = 0x0
@@ -326,7 +353,7 @@ class Timer:
             case 0xFF07:
                 self.TAC = value
 
-    def reset_clock(self):
+    def reset_clock(self) -> None:
         match self._TAC_CLOCK_SELECT:
             case 0:
                 self.CLOCK = 1024
@@ -337,7 +364,7 @@ class Timer:
             case 3:
                 self.CLOCK = 256
 
-    def tick(self, cycles):
+    def tick(self, cycles: int) -> None:
         for _ in range(cycles):
             self._DIVIDER = (self._DIVIDER + 1) & 0xFFFF
 
@@ -356,18 +383,18 @@ class Timer:
 
 
 class Interrupts:
-    def __init__(self, value=0x00, upper_bits=False):
+    def __init__(self, value: int = 0x00, upper_bits: bool = False) -> None:
         self.set(value)
         self.UPPER_F = upper_bits
 
-    def set(self, value):
+    def set(self, value: int) -> None:
         self.JOYPAD = value >> 4 & 1
         self.SERIAL = value >> 3 & 1
         self.TIMER = value >> 2 & 1
         self.LCD = value >> 1 & 1
         self.VBLANK = value & 1
 
-    def get(self):
+    def get(self) -> int:
         return (
             (7 << 5 if self.UPPER_F else 0)
             | self.JOYPAD << 4
@@ -381,7 +408,7 @@ class Interrupts:
 class Joypad:
     # 0xCF -> 11001111
     # 0 is True, 1 is False
-    def __init__(self, IO: IO):
+    def __init__(self, IO: IO) -> None:
 
         self.IO = IO
 
@@ -390,7 +417,7 @@ class Joypad:
 
         self.reset_keys()
 
-    def reset_keys(self):
+    def reset_keys(self) -> None:
         # SsBA
         self.START = False
         self.SELECT = False
@@ -403,7 +430,7 @@ class Joypad:
         self.LEFT = False
         self.RIGHT = False
 
-    def get(self):
+    def get(self) -> int:
         final = 0xF
         if self.USE_SELECT:
             final = (
@@ -427,11 +454,11 @@ class Joypad:
             | final
         )
 
-    def set(self, value):
+    def set(self, value: int) -> None:
         self.USE_SELECT = not (value >> 5 & 1)
         self.USE_DPAD = not (value >> 4 & 1)
 
-    def set_keys(self, scancode, value):
+    def set_keys(self, scancode: int, value: bool) -> None:
         match scancode:
             case pygame.KSCAN_DOWN:
                 self.DOWN = value
@@ -450,7 +477,7 @@ class Joypad:
             case pygame.KSCAN_S:
                 self.A = value
 
-    def handle_event(self, event):
+    def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == pygame.KEYDOWN:
             self.set_keys(event.scancode, True)
             self.IO.IF.JOYPAD = 1
