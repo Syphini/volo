@@ -22,6 +22,7 @@ def main() -> None:
         parser.add_argument("-s", "--skip-boot", action="store_true", default=False)
         parser.add_argument("-m", "--mem-dump", action="store_true", default=False)
         parser.add_argument("-d", "--debug", action="store_true", default=False)
+        parser.add_argument("-p", "--profile", action="store_true", default=False)
         return parser.parse_args(args)
 
     args = parse_args(sys.argv[1:])
@@ -33,7 +34,7 @@ def main() -> None:
 
     OP_DEBUG = False
 
-    if args.debug:
+    if args.profile:
         profiler = cProfile.Profile()
         profiler.enable()
 
@@ -52,10 +53,10 @@ def main() -> None:
             R.debug()
             print("------")
 
-            if not exception:
-                profiler.disable()
-                stats = pstats.Stats(profiler).sort_stats("ncalls")
-                stats.print_stats()
+        if args.profile:
+            profiler.disable()
+            stats = pstats.Stats(profiler).sort_stats("ncalls")
+            stats.print_stats()
 
         if exception:
             traceback.print_exception(exception)
@@ -69,10 +70,11 @@ def main() -> None:
     # region CPU Logic
     try:
         while True:
-            if pygame.time.get_ticks() - lastTime >= 1000:
-                print(f"CYCLES: {mmu.IO.LCD.CYCLE_COUNTER}")
-                lastTime = pygame.time.get_ticks()
-                mmu.IO.LCD.CYCLE_COUNTER = 0
+            if args.debug:
+                if pygame.time.get_ticks() - lastTime >= 1000:
+                    print(f"CYCLES: {mmu.IO.LCD.CYCLE_COUNTER}")
+                    lastTime = pygame.time.get_ticks()
+                    mmu.IO.LCD.CYCLE_COUNTER = 0
 
             # region Events
             for event in pygame.event.get():
@@ -92,44 +94,38 @@ def main() -> None:
                     mmu.IME = False
                     mmu.IO.IF.VBLANK = 0
                     opcodes.CALL_CD(0x40)
-                    mmu.IO._TIMER.tick(20)
-                    mmu.IO.LCD.tick(20)
+                    mmu.IO.tick(20)
                     mmu.HALT = False
                 elif mmu.IO.IF.LCD == 1 and mmu.IO.IE.LCD == 1:
                     mmu.IME = False
                     mmu.IO.IF.LCD = 0
                     opcodes.CALL_CD(0x48)
-                    mmu.IO._TIMER.tick(20)
-                    mmu.IO.LCD.tick(20)
+                    mmu.IO.tick(20)
                     mmu.HALT = False
                 elif mmu.IO.IF.TIMER == 1 and mmu.IO.IE.TIMER == 1:
                     mmu.IME = False
                     mmu.IO.IF.TIMER = 0
                     opcodes.CALL_CD(0x50)
-                    mmu.IO._TIMER.tick(20)
-                    mmu.IO.LCD.tick(20)
+                    mmu.IO.tick(20)
                     mmu.HALT = False
                 elif mmu.IO.IF.SERIAL == 1 and mmu.IO.IE.SERIAL == 1:
                     mmu.IME = False
                     mmu.IO.IF.SERIAL = 0
                     opcodes.CALL_CD(0x58)
-                    mmu.IO._TIMER.tick(20)
-                    mmu.IO.LCD.tick(20)
+                    mmu.IO.tick(20)
                     mmu.HALT = False
                 elif mmu.IO.IF.JOYPAD == 1 and mmu.IO.IE.JOYPAD == 1:
                     mmu.IME = False
                     mmu.IO.IF.JOYPAD = 0
                     opcodes.CALL_CD(0x60)
-                    mmu.IO._TIMER.tick(20)
-                    mmu.IO.LCD.tick(20)
+                    mmu.IO.tick(20)
                     mmu.HALT = False
 
             # endregion
 
             if mmu.HALT:
                 if mmu.IO.IF.get() & mmu.IO.IE.get() == 0:
-                    mmu.IO._TIMER.tick(4)
-                    mmu.IO.LCD.tick(4)
+                    mmu.IO.tick(4)
                     continue
                 else:
                     mmu.HALT = False
@@ -151,7 +147,8 @@ def main() -> None:
 
             cycles = opcodes.execute(PC_DATA)
             mmu.IO.tick(cycles)
-            mmu.IO.LCD.CYCLE_COUNTER += 1
+            if args.debug:
+                mmu.IO.LCD.CYCLE_COUNTER += 1
 
     # endregion
 

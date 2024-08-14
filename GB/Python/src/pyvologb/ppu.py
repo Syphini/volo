@@ -196,72 +196,6 @@ class PPU:
             self._CLOCK = 0
             self.clear_display()
 
-    def get_tile_colours(
-        self, tile_bytes: bytearray, tileY: int, attributes: int = 0
-    ) -> list[int]:
-        """Convert byte data into tile data"""
-
-        # priority = 0
-        yFlip = 0
-        xFlip = 0
-
-        tileY *= 2
-
-        if attributes:
-            # priority = attributes >> 7 & 1
-            yFlip = attributes >> 6 & 1
-            xFlip = attributes >> 5 & 1
-
-        return [
-            (
-                (
-                    (
-                        tile_bytes[15 - (tileY + 1) if yFlip else (tileY + 1)]
-                        >> (i if xFlip else (7 - i))
-                        & 1
-                    )
-                    << 1
-                )
-                | (
-                    tile_bytes[15 - tileY if yFlip else tileY]
-                    >> (i if xFlip else (7 - i))
-                    & 1
-                )
-            )
-            for i in range(8)
-        ]
-
-    def draw_oam_line(self) -> None:
-        line = self._LY
-
-        sprite_height = 8
-        sprite_count = 0
-        sprites_list = []
-
-        # find sprites on this line
-        for i in range(0, 0xA0, 4):
-            y = self.mmu.OAM[i] - 16
-
-            if y <= line < y + sprite_height:
-                sprites_list.append(i)
-                sprite_count += 1
-                if sprite_count == 10:
-                    break
-
-        # render the sprites onto the line
-        for i in range(sprite_count):
-            spriteIndex = sprites_list[i]
-            y = self.mmu.OAM[spriteIndex] - 16
-            x = self.mmu.OAM[spriteIndex + 1] - 8
-            tileIndex = self.mmu.OAM[spriteIndex + 2] * 16
-            attributes = self.mmu.OAM[spriteIndex + 3]
-
-            tile = self.mmu.VRAM[tileIndex : tileIndex + 16]
-            colours = self.get_tile_colours(tile, line % 8, attributes)
-
-            for lineX in range(8):
-                self.draw_pixel(x + lineX, line, colours[lineX], True)
-
     def draw_pixel(
         self,
         x: int,
@@ -284,31 +218,108 @@ class PPU:
             ],
         )
 
+    def get_tile_colours(
+        self, tile_bytes: bytearray, tileY: int, attributes: int = 0
+    ) -> list[int]:
+        """Convert byte data into tile data"""
+
+        # priority = 0
+        yFlip = 0
+        xFlip = 0
+        palette = self.BGP
+
+        tileY *= 2
+
+        if attributes:
+            # priority = attributes >> 7 & 1
+            yFlip = attributes >> 6 & 1
+            xFlip = attributes >> 5 & 1
+            palette = self.OBP1 if attributes >> 4 & 1 == 1 else self.OBP0
+
+        return [
+            palette
+            >> (
+                (
+                    (
+                        tile_bytes[15 - (tileY + 1) if yFlip else (tileY + 1)]
+                        >> (i if xFlip else (7 - i))
+                        & 1
+                    )
+                    << 1
+                )
+                | (
+                    tile_bytes[15 - tileY if yFlip else tileY]
+                    >> (i if xFlip else (7 - i))
+                    & 1
+                )
+            )
+            * 2
+            & 3
+            for i in range(8)
+        ]
+
     def drawline(self) -> None:
         """Draw the current scanline"""
-        # TODO make faster
-        # aim: 40ms
-        # per 20 cycles @ 10000 ticks
         y = self._LY
         scrollY = (y + self.SCY) & 0xFF
 
-        for x in range(0, self.SCREEN_X, 8):
+        # attempting to reduce the number of tile calcs by stepping 8 pixels at a time
+        # performance drop at max SCX is negligable compared to recalculating tiles per pixel
+        # i'm sure there's a better way to do this but here we are
+        for x in range(0, self.SCREEN_X + self.SCX, 8):
             use_alt_block = self.LCDC.BIT_4 == 1
             use_alt_tilemap = self.LCDC.BIT_3 == 1
 
             vramTileBlock = 0x0000 if use_alt_block else 0x1000
             tileMap = 0x1C00 if use_alt_tilemap else 0x1800
 
-            tileIndex = self.mmu.VRAM[tileMap + ((scrollY // 8) * 32) + (x // 8)]
-            offset = (
+            tileIndex = self.mmu.VRAM[
+                tileMap + ((scrollY // 8) * 32) + ((x & 0xFF) // 8)
+            ]
+            blockOffset = (
                 tileIndex if use_alt_block == 1 else (tileIndex ^ 0x80) - 0x80
             ) * 16
-            tile = self.mmu.VRAM[vramTileBlock + offset : vramTileBlock + offset + 16]
+            tile = self.mmu.VRAM[
+                vramTileBlock + blockOffset : vramTileBlock + blockOffset + 16
+            ]
             colours = self.get_tile_colours(tile, scrollY % 8)
 
+            # reducing draw calls by discarding pixels offscreen
             for xi in range(8):
-                scrollX = (x + xi - self.SCX) & 0xFF
-                self.draw_pixel(scrollX, y, colours[xi])
+                pixelX = (x + xi) - self.SCX
+                if pixelX >= 0 and pixelX <= self.SCREEN_X:
+                    self.draw_pixel(pixelX, y, colours[xi])
+
+    def draw_oam_line(self) -> None:
+        line = self._LY
+
+        sprite_height = 8
+        sprite_count = 0
+        sprites_list = []
+
+        # find sprites on this line
+        for i in range(0, 0xA0, 4):
+            yPos = self.mmu.OAM[i] - 16
+
+            if yPos <= line < yPos + sprite_height:
+                sprites_list.append(i)
+                sprite_count += 1
+                if sprite_count == 10:
+                    break
+
+        # render the sprites onto the line
+        for i in range(sprite_count):
+            spriteIndex = sprites_list[i]
+            yPos = self.mmu.OAM[spriteIndex] - 16
+            xPos = self.mmu.OAM[spriteIndex + 1] - 8
+            tileIndex = self.mmu.OAM[spriteIndex + 2] * 16
+            attributes = self.mmu.OAM[spriteIndex + 3]
+
+            tile = self.mmu.VRAM[tileIndex : tileIndex + 16]
+            colours = self.get_tile_colours(tile, (line - yPos) % 8, attributes)
+
+            for lineX in range(8):
+                self.draw_pixel(xPos + lineX, line, colours[lineX], True)
 
     def clear_display(self) -> None:
         """Clear the canvas"""
