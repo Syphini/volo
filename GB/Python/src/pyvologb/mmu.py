@@ -6,14 +6,18 @@ from pyvologb.ppu import PPU
 
 
 class MMU:
-    def __init__(self, cartridge: Cartridge, use_boot_rom: bool = False) -> None:
+    def __init__(
+        self, cartridge: Cartridge, use_boot_rom: bool = False, debug: bool = False
+    ) -> None:
 
         self.BOOT_ROM = "/lib/DMG_ROM.bin"
         self.CARTRIDGE = cartridge
         self.CURRENT_BANK = 0
         self.USE_BOOT_ROM = use_boot_rom
 
-        io = IO(self)
+        self.DEBUG = debug
+
+        io = IO(self, self.DEBUG)
 
         # ROM Memory is cartridge memory, and is therefore readonly unless there's an MBC chip
         self.ROM1 = bytearray(0x4000)  # 0000 -> 3FFF
@@ -146,13 +150,12 @@ class MMU:
 
 
 class IO:
-    def __init__(self, mmu: MMU) -> None:
+    def __init__(self, mmu: MMU, debug: bool = False) -> None:
 
         self.MMU = mmu
 
         self.JOYP = Joypad(self)  # FF00
-        self.SB = 0x00  # FF01
-        self.SC = 0x73  # FF02
+        self.SERIAL = Serial(debug)  # FF01 -> FF02
         self._TIMER = Timer(self)  # FF04 -> FF07
         self.IF = Interrupts(0xE1, upper_bits=True)  # FF0F
         self.NR10 = 0x80  # FF10
@@ -186,9 +189,11 @@ class IO:
         match address:
             case 0xFF00:
                 return self.JOYP.get()
-            case addr if 0xFF01 <= addr <= 0xFF02:
-                print("TODO handle serial", formatted_hex(address))
-                return 0xFF
+            case 0xFF01:
+                print(self.SERIAL.get_serial())
+                return self.SERIAL.SB
+            case 0xFF02:
+                return self.SERIAL.SC
             case addr if 0xFF04 <= addr <= 0xFF07:
                 return self._TIMER.get(addr)
             case 0xFF0F:
@@ -208,8 +213,10 @@ class IO:
         match address:
             case 0xFF00:
                 self.JOYP.set(value)
-            case addr if 0xFF01 <= addr <= 0xFF02:
-                print("TODO handle serial", formatted_hex(address))
+            case 0xFF01:
+                self.SERIAL.SB = value
+            case 0xFF02:
+                self.SERIAL.SC = value
             case addr if 0xFF04 <= addr <= 0xFF07:
                 self._TIMER.set(addr, value)
             case 0xFF0F:
@@ -237,8 +244,8 @@ class IO:
         data = bytearray(
             [
                 self.JOYP.get(),
-                self.SB,
-                self.SC,
+                self.SERIAL.SB,
+                self.SERIAL.SC,
                 0x00,
                 self._TIMER.DIV,
                 self._TIMER.TIMA,
@@ -485,3 +492,42 @@ class Joypad:
             self.IO.IF.JOYPAD = 1
         if event.type == pygame.KEYUP:
             self.set_keys(event.scancode, False)
+
+
+class Serial:
+    def __init__(self, debug: bool = False) -> None:
+        self.DEBUG = debug
+
+        self.BUFFER: list[int] = []
+        self.BUFFER_LAST = 0
+
+        self.SB = 0x00  # FF01
+        self.SC = 0x7E  # FF02
+
+    def get_serial(self) -> str:
+        ret = "".join([chr(x) for x in self.BUFFER])
+        if not self.DEBUG:
+            self.BUFFER.clear()
+        return ret
+
+    @property
+    def SB(self) -> int:
+        return self.BUFFER_LAST
+
+    @SB.setter
+    def SB(self, value: int) -> None:
+        self.BUFFER.append(value)
+        self.BUFFER_LAST = value
+
+        if self.DEBUG:
+            print("SERIAL:\n", self.get_serial())
+
+    @property
+    def SC(self) -> int:
+        return self.ENABLE << 7 | 0x1F << 2 | self.SPEED << 1 | self.SELECT
+
+    @SC.setter
+    def SC(self, value: int) -> None:
+        self.ENABLE = value >> 7 & 1
+        self.SPEED = value >> 1 & 1
+        self.SELECT = value & 1

@@ -41,7 +41,7 @@ def main() -> None:
     # region Registers
 
     cartridge = Cartridge(ROM_PATH)
-    mmu = MMU(cartridge, use_boot_rom=(not args.skip_boot))
+    mmu = MMU(cartridge, use_boot_rom=(not args.skip_boot), debug=args.debug)
     R = Registers(mmu)
     opcodes = Opcodes(mmu, R)
 
@@ -51,6 +51,7 @@ def main() -> None:
         if args.debug:
             print("------")
             R.debug()
+            mmu.IO.SERIAL.get_serial()
             print("------")
 
         if args.profile:
