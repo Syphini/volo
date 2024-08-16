@@ -11,8 +11,8 @@ class PPU:
     def __init__(self, mmu: "MMU") -> None:
         self.mmu = mmu
 
-        self.LCDC = Control_Bits(0x91)  # FF40
-        self.STAT = Control_Bits(0x85)  # FF41
+        self.LCDC = LCDC(0x91)  # FF40
+        self.STAT = STAT(0x85)  # FF41
         self.SCY = 0x00  # FF42F
         self.SCX = 0x00  # FF43
         self._LY = 0x00  # FF44 -- read-only
@@ -36,6 +36,24 @@ class PPU:
         ]
 
         self.init_pygame()
+
+    @property
+    def PPU_MODE(self) -> int:
+        return self._MODE
+
+    @PPU_MODE.setter
+    def PPU_MODE(self, value: int) -> None:
+        self._MODE = value
+        match value:
+            case 0:
+                if self.STAT.MODE_0_SELECT:
+                    self.mmu.IO.IF.LCD = 1
+            case 1:
+                if self.STAT.MODE_1_SELECT:
+                    self.mmu.IO.IF.LCD = 1
+            case 2:
+                if self.STAT.MODE_2_SELECT:
+                    self.mmu.IO.IF.LCD = 1
 
     @property
     def DMA(self) -> int:
@@ -152,34 +170,34 @@ class PPU:
             for _ in range(cycles):
 
                 if self.LYC == self._LY:
-                    self.STAT.BIT_2 = 1
-                    if self.STAT.BIT_6 == 1:
+                    self.STAT.LYC_EQUAL = 1
+                    if self.STAT.LYC_SELECT == 1:
                         self.mmu.IO.IF.LCD = 1
 
-                self.STAT.BIT_0 = self._MODE & 1
-                self.STAT.BIT_1 = (self._MODE & 2) >> 1
+                self.STAT.PPU_MODE = self.PPU_MODE
 
-                match self._MODE:
+                match self.PPU_MODE:
                     case 2:  # OAM
                         if self._CLOCK == 80:
-                            self._MODE = 3
+                            self.PPU_MODE = 3
                             self._CLOCK = 0
                     case 3:  # Pixel
                         if self._CLOCK == 172:
-                            self._MODE = 0
+                            self.PPU_MODE = 0
                             self._CLOCK = 0
 
                             self.drawline()
-                            self.draw_oam_line()
+                            if self.LCDC.BIT_1 == 1:
+                                self.draw_oam_line()
                     case 0:  # H-Blank
                         if self._CLOCK == 204:
                             self._LY += 1
 
                             if self._LY == 143:
                                 self.mmu.IO.IF.VBLANK = 1
-                                self._MODE = 1
+                                self.PPU_MODE = 1
                             else:
-                                self._MODE = 2
+                                self.PPU_MODE = 2
                             self._CLOCK = 0
                     case 1:  # V-Blank
                         if self._CLOCK == 456:
@@ -187,24 +205,24 @@ class PPU:
                             self._CLOCK = 0
 
                             if self._LY > 153:
-                                self._MODE = 2
+                                self.PPU_MODE = 2
                                 self._LY = 0
                                 pygame.display.flip()
                 self._CLOCK += 1
         else:
             self._LY = 0
             self._CLOCK = 0
+            self.STAT.set(0)
             self.clear_display()
 
     def draw_pixel(
         self,
         x: int,
         y: int,
-        colourId: int,
-        transparent: bool = False,
+        colourId: int | None,
     ) -> None:
         """Draw pixel at (x,y)"""
-        if transparent and colourId == 0:
+        if colourId is None:
             return
 
         pygame.draw.rect(
@@ -219,43 +237,48 @@ class PPU:
         )
 
     def get_tile_colours(
-        self, tile_bytes: bytearray, tileY: int, attributes: int = 0
-    ) -> list[int]:
+        self, tile_bytes: bytearray, tileY: int, attributes: int | None = None
+    ) -> list[int | None]:
         """Convert byte data into tile data"""
 
         # priority = 0
         yFlip = 0
         xFlip = 0
         palette = self.BGP
+        transparent: int | None = None
 
         tileY *= 2
 
-        if attributes:
+        if attributes is not None:
             # priority = attributes >> 7 & 1
             yFlip = attributes >> 6 & 1
             xFlip = attributes >> 5 & 1
             palette = self.OBP1 if attributes >> 4 & 1 == 1 else self.OBP0
+            transparent = palette & 3
 
         return [
-            palette
-            >> (
-                (
+            None if transparent == c else c
+            for c in [
+                palette
+                >> (
                     (
-                        tile_bytes[15 - (tileY + 1) if yFlip else (tileY + 1)]
+                        (
+                            tile_bytes[15 - (tileY + 1) if yFlip else (tileY + 1)]
+                            >> (i if xFlip else (7 - i))
+                            & 1
+                        )
+                        << 1
+                    )
+                    | (
+                        tile_bytes[15 - tileY if yFlip else tileY]
                         >> (i if xFlip else (7 - i))
                         & 1
                     )
-                    << 1
                 )
-                | (
-                    tile_bytes[15 - tileY if yFlip else tileY]
-                    >> (i if xFlip else (7 - i))
-                    & 1
-                )
-            )
-            * 2
-            & 3
-            for i in range(8)
+                * 2
+                & 3
+                for i in range(8)
+            ]
         ]
 
     def drawline(self) -> None:
@@ -293,7 +316,9 @@ class PPU:
     def draw_oam_line(self) -> None:
         line = self._LY
 
-        sprite_height = 8
+        tall_tile = bool(self.LCDC.BIT_2)
+
+        sprite_height = 16 if tall_tile else 8
         sprite_count = 0
         sprites_list = []
 
@@ -312,14 +337,19 @@ class PPU:
             spriteIndex = sprites_list[i]
             yPos = self.mmu.OAM[spriteIndex] - 16
             xPos = self.mmu.OAM[spriteIndex + 1] - 8
-            tileIndex = self.mmu.OAM[spriteIndex + 2] * 16
+            tileIndex = self.mmu.OAM[spriteIndex + 2]
             attributes = self.mmu.OAM[spriteIndex + 3]
 
-            tile = self.mmu.VRAM[tileIndex : tileIndex + 16]
+            if tall_tile and (line % 16 < 8):
+                tileIndex &= 0xFE
+            elif tall_tile:
+                tileIndex |= 0x01
+
+            tile = self.mmu.VRAM[tileIndex * 16 : (tileIndex * 16) + 16]
             colours = self.get_tile_colours(tile, (line - yPos) % 8, attributes)
 
             for lineX in range(8):
-                self.draw_pixel(xPos + lineX, line, colours[lineX], True)
+                self.draw_pixel(xPos + lineX, line, colours[lineX])
 
     def clear_display(self) -> None:
         """Clear the canvas"""
@@ -328,7 +358,7 @@ class PPU:
         )
 
 
-class Control_Bits:
+class LCDC:
     def __init__(self, value: int) -> None:
         self.set(value)
 
@@ -352,4 +382,29 @@ class Control_Bits:
             | self.BIT_2 << 2
             | self.BIT_1 << 1
             | self.BIT_0
+        )
+
+
+class STAT:
+    def __init__(self, value: int) -> None:
+        self.set(value)
+
+    def set(self, value: int) -> None:
+        self.LYC_SELECT = value >> 6 & 1
+        self.MODE_2_SELECT = value >> 5 & 1
+        self.MODE_1_SELECT = value >> 4 & 1
+        self.MODE_0_SELECT = value >> 3 & 1
+        self.LYC_EQUAL = value >> 2 & 1
+        self.PPU_MODE = value & 3
+
+    def get(self) -> int:
+        return (
+            1 << 7
+            | self.LYC_SELECT << 6
+            | self.MODE_2_SELECT << 5
+            | self.MODE_1_SELECT << 4
+            | self.MODE_0_SELECT << 3
+            | self.LYC_EQUAL << 2
+            | (self.PPU_MODE >> 1) << 1
+            | self.PPU_MODE & 1
         )
