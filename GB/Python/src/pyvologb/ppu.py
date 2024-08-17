@@ -166,7 +166,7 @@ class PPU:
     # Tilemap 2 9C00 -> 9FFF
 
     def tick(self, cycles: int) -> None:
-        if self.LCDC.BIT_7 == 1:
+        if self.LCDC.LCD_ENABLE == 1:
             for _ in range(cycles):
 
                 if self.LYC == self._LY:
@@ -187,7 +187,7 @@ class PPU:
                             self._CLOCK = 0
 
                             self.drawline()
-                            if self.LCDC.BIT_1 == 1:
+                            if self.LCDC.OBJ_ENABLE == 1:
                                 self.draw_oam_line()
                     case 0:  # H-Blank
                         if self._CLOCK == 204:
@@ -290,8 +290,8 @@ class PPU:
         # performance drop at max SCX is negligable compared to recalculating tiles per pixel
         # i'm sure there's a better way to do this but here we are
         for x in range(0, self.SCREEN_X + self.SCX, 8):
-            use_alt_block = self.LCDC.BIT_4 == 1
-            use_alt_tilemap = self.LCDC.BIT_3 == 1
+            use_alt_block = self.LCDC.ALT_BG_WIN_TILES == 1
+            use_alt_tilemap = self.LCDC.ALT_BG_TILEMAP == 1
 
             vramTileBlock = 0x0000 if use_alt_block else 0x1000
             tileMap = 0x1C00 if use_alt_tilemap else 0x1800
@@ -316,7 +316,7 @@ class PPU:
     def draw_oam_line(self) -> None:
         line = self._LY
 
-        tall_tile = bool(self.LCDC.BIT_2)
+        tall_tile = bool(self.LCDC.OBJ_SIZE)
 
         sprite_height = 16 if tall_tile else 8
         sprite_count = 0
@@ -363,25 +363,25 @@ class LCDC:
         self.set(value)
 
     def set(self, value: int) -> None:
-        self.BIT_7 = value >> 7 & 1
-        self.BIT_6 = value >> 6 & 1
-        self.BIT_5 = value >> 5 & 1
-        self.BIT_4 = value >> 4 & 1
-        self.BIT_3 = value >> 3 & 1
-        self.BIT_2 = value >> 2 & 1
-        self.BIT_1 = value >> 1 & 1
-        self.BIT_0 = value & 1
+        self.LCD_ENABLE = value >> 7 & 1
+        self.ALT_WIN_TILEMAP = value >> 6 & 1
+        self.WIN_ENABLE = value >> 5 & 1
+        self.ALT_BG_WIN_TILES = value >> 4 & 1
+        self.ALT_BG_TILEMAP = value >> 3 & 1
+        self.OBJ_SIZE = value >> 2 & 1
+        self.OBJ_ENABLE = value >> 1 & 1
+        self.BG_WIN_ENABLE = value & 1
 
     def get(self) -> int:
         return (
-            self.BIT_7 << 7
-            | self.BIT_6 << 6
-            | self.BIT_5 << 5
-            | self.BIT_4 << 4
-            | self.BIT_3 << 3
-            | self.BIT_2 << 2
-            | self.BIT_1 << 1
-            | self.BIT_0
+            self.LCD_ENABLE << 7
+            | self.ALT_WIN_TILEMAP << 6
+            | self.WIN_ENABLE << 5
+            | self.ALT_BG_WIN_TILES << 4
+            | self.ALT_BG_TILEMAP << 3
+            | self.OBJ_SIZE << 2
+            | self.OBJ_ENABLE << 1
+            | self.BG_WIN_ENABLE
         )
 
 
