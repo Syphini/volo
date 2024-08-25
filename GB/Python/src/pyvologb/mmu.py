@@ -10,7 +10,7 @@ class MMU:
         self, cartridge: Cartridge, use_boot_rom: bool = False, debug: bool = False
     ) -> None:
 
-        self.BOOT_ROM = "/lib/DMG_ROM.bin"
+        self.BOOT_ROM = "/lib/bootrom.bin"
         self.CARTRIDGE = cartridge
         self.CURRENT_BANK = 0
         self.USE_BOOT_ROM = use_boot_rom
@@ -124,7 +124,10 @@ class MMU:
     def dump(self) -> None:
         # Hex Dump
         with open(
-            os.path.join(os.path.dirname(self.CARTRIDGE.ROM_PATH), "dump.txt"), "w"
+            os.path.join(
+                os.path.dirname(os.path.realpath(__file__)), "logs/mem_dump.log"
+            ),
+            "w",
         ) as f:
             dump = bytearray.hex(
                 self.ROM1
@@ -158,29 +161,11 @@ class IO:
         self.SERIAL = Serial(debug)  # FF01 -> FF02
         self._TIMER = Timer(self)  # FF04 -> FF07
         self.IF = Interrupts(0xE1, upper_bits=True)  # FF0F
-        self.NR10 = 0x80  # FF10
-        self.NR11 = 0xBF  # FF11
-        self.NR12 = 0xF3  # FF12
-        self.NR13 = 0xFF  # FF13
-        self.NR14 = 0xBF  # FF14
-        self.NR21 = 0x3F  # FF16
-        self.NR22 = 0x00  # FF17
-        self.NR23 = 0xFF  # FF18
-        self.NR24 = 0xBF  # FF19
-        self.NR30 = 0x7F  # FF1A
-        self.NR31 = 0xFF  # FF1B
-        self.NR32 = 0x9F  # FF1C
-        self.NR33 = 0xFF  # FF1D
-        self.NR34 = 0xBF  # FF1E
-        self.NR41 = 0xFF  # FF20
-        self.NR42 = 0x00  # FF21
-        self.NR43 = 0x00  # FF22
-        self.NR44 = 0xBF  # FF23
-        self.NR50 = 0x77  # FF24
-        self.NR51 = 0xF3  # FF25
-        self.NR52 = 0xF1  # FF26
+
+        self.AUDIO = Audio()
+
         self.WAVE = bytearray(0x10)  # FF30 -> FF3F
-        self.LCD = PPU(mmu)  # FF40 -> FF4B
+        self.LCD = PPU(mmu, debug)  # FF40 -> FF4B
         # ???
         self.BANK = (not mmu.USE_BOOT_ROM) & 1  # FF50
         self.IE = Interrupts()  # FFFF
@@ -199,8 +184,7 @@ class IO:
             case 0xFF0F:
                 return self.IF.get()
             case addr if 0xFF10 <= addr <= 0xFF26:
-                print("TODO handle audio registers", formatted_hex(address))
-                return 0xFF
+                return self.AUDIO.get(addr)
             case addr if 0xFF30 <= addr <= 0xFF3F:
                 return self.WAVE[address - 0xFF30]
             case addr if 0xFF40 <= addr <= 0xFF4B:
@@ -222,7 +206,7 @@ class IO:
             case 0xFF0F:
                 self.IF.set(value)
             case addr if 0xFF10 <= addr <= 0xFF26:
-                print("TODO handle audio registers", formatted_hex(address))
+                self.AUDIO.set(addr, value)
             case addr if 0xFF30 <= addr <= 0xFF3F:
                 self.WAVE[address - 0xFF30] = value
             case addr if 0xFF40 <= addr <= 0xFF4B:
@@ -239,6 +223,7 @@ class IO:
     def tick(self, cycles: int) -> None:
         self._TIMER.tick(cycles)
         self.LCD.tick(cycles)
+        self.AUDIO.tick(cycles)
 
     def dump(self) -> bytearray:
         data = bytearray(
@@ -259,40 +244,10 @@ class IO:
                 0x00,
                 0x00,
                 self.IF.get(),
-                self.NR10,
-                self.NR11,
-                self.NR12,
-                self.NR13,
-                self.NR14,
-                0x00,
-                self.NR21,
-                self.NR22,
-                self.NR23,
-                self.NR24,
-                self.NR30,
-                self.NR31,
-                self.NR32,
-                self.NR33,
-                self.NR34,
-                0x00,
-                self.NR41,
-                self.NR42,
-                self.NR43,
-                self.NR44,
-                self.NR50,
-                self.NR51,
-                self.NR52,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
-                0x00,
             ]
         )
+        data.extend(self.AUDIO.dump())
+        data.extend(bytearray(0x09))
         data.extend(self.WAVE)
         data.extend(self.LCD.dump())
         data.extend(bytearray(0x4))
@@ -531,3 +486,121 @@ class Serial:
         self.ENABLE = value >> 7 & 1
         self.SPEED = value >> 1 & 1
         self.SELECT = value & 1
+
+
+class Audio:
+    def __init__(self) -> None:
+
+        self.PULSE_CHANNEL = self.Pulse()
+
+        self.NR10 = 0x80  # FF10
+        self.NR11 = 0xBF  # FF11
+        self.NR12 = 0xF3  # FF12
+        self.NR13 = 0xFF  # FF13
+        self.NR14 = 0xBF  # FF14
+
+        self.NR21 = 0x3F  # FF16
+        self.NR22 = 0x00  # FF17
+        self.NR23 = 0xFF  # FF18
+        self.NR24 = 0xBF  # FF19
+
+        self.NR30 = 0x7F  # FF1A
+        self.NR31 = 0xFF  # FF1B
+        self.NR32 = 0x9F  # FF1C
+        self.NR33 = 0xFF  # FF1D
+        self.NR34 = 0xBF  # FF1E
+
+        self.NR41 = 0xFF  # FF20
+        self.NR42 = 0x00  # FF21
+        self.NR43 = 0x00  # FF22
+        self.NR44 = 0xBF  # FF23
+
+        self.NR50 = 0x77  # FF24
+        self.NR51 = 0xF3  # FF25
+        self.NR52 = 0xF1  # FF26
+
+    def get(self, addr: int) -> int:
+        match addr:
+            case 0xFF16:
+                return self.PULSE_CHANNEL.get(1)
+            case 0xFF17:
+                return self.PULSE_CHANNEL.get(2)
+            case 0xFF18:
+                return self.PULSE_CHANNEL.get(3)
+            case 0xFF19:
+                return self.PULSE_CHANNEL.get(4)
+            case _:
+                print("Audio register not implemented", formatted_hex(addr))
+                return 0xFF
+
+    def set(self, addr: int, value: int) -> None:
+        match addr:
+            case 0xFF16:
+                self.PULSE_CHANNEL.set(1, value)
+            case 0xFF17:
+                self.PULSE_CHANNEL.set(2, value)
+            case 0xFF18:
+                self.PULSE_CHANNEL.set(3, value)
+            case 0xFF19:
+                self.PULSE_CHANNEL.set(4, value)
+            case _:
+                print(
+                    "Audio register not implemented",
+                    formatted_hex(addr),
+                    formatted_hex(value),
+                )
+
+    def tick(self, cycles: int) -> None:
+        pass
+
+    def dump(self) -> bytearray:
+        return bytearray(23)
+
+    class Pulse:
+        def __init__(self) -> None:
+            self.PERIOD_TIMER = 0
+            self.LENGTH_TIMER = 64
+
+            self.WAVEFORMS = [
+                [0, 0, 0, 0, 0, 0, 0, 1],  # Low 7 High 1 - 12.5%
+                [0, 0, 0, 0, 0, 0, 1, 1],  # Low 6 High 2 - 25%
+                [0, 0, 0, 0, 1, 1, 1, 1],  # Low 4 High 4 - 50%
+                [1, 1, 1, 1, 1, 1, 0, 0],  # High 6 Low 2 - 75%
+            ]
+
+            self.WAVE_DUTY = 0
+            self.LENGTH_INIT = 0
+            self.VOL_INIT = 0
+            self.ENV_DIR = 0  # 0 decrease, 1 increase
+            self.PERIOD = 0  # 11bit
+            self.LENGTH_ENABLE = 0
+
+        def get(self, register: int) -> int:
+            match register:
+                case 1:
+                    return self.WAVE_DUTY << 6
+                case 2:
+                    return self.VOL_INIT << 4 | self.ENV_DIR << 3 | (self.PERIOD >> 8)
+                case 3:
+                    return 0  # write only
+                case 4:
+                    return self.LENGTH_ENABLE << 6
+
+        def set(self, register: int, value: int) -> None:
+            match register:
+                case 1:
+                    self.WAVE_DUTY = value >> 6 & 0x3
+                    self.LENGTH_INIT = value & 0x3F
+                case 2:
+                    self.VOL_INIT = value >> 3 & 0xF
+                    self.ENV_DIR = value >> 2 & 1
+                case 3:
+                    self.PERIOD = (self.PERIOD & 0x700) | (value & 0xFF)
+                case 4:
+                    if value & 0x80:
+                        self.trigger()
+                    self.LENGTH_ENABLE = value >> 6 & 1
+                    self.PERIOD = value & 0x7 << 8 | self.PERIOD & 0xFF
+
+        def trigger(self) -> None:
+            pass

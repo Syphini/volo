@@ -38,6 +38,9 @@ def main() -> None:
         profiler = cProfile.Profile()
         profiler.enable()
 
+    if args.mem_dump:
+        state_debug = []
+
     # region Registers
 
     cartridge = Cartridge(ROM_PATH)
@@ -64,6 +67,13 @@ def main() -> None:
 
     def dump() -> None:
         if args.mem_dump:
+            with open(
+                os.path.join(
+                    os.path.dirname(os.path.realpath(__file__)), "logs/state_dump.log"
+                ),
+                "w",
+            ) as f:
+                f.writelines(state_debug)
             mmu.dump()
 
     lastTime = 0
@@ -71,6 +81,9 @@ def main() -> None:
     # region CPU Logic
     try:
         while True:
+            if args.mem_dump:
+                curr_state = f"A:{formatted_hex(R.A)} F:{formatted_hex(R.F)} B:{formatted_hex(R.B)} C:{formatted_hex(R.C)} D:{formatted_hex(R.D)} E:{formatted_hex(R.E)} H:{formatted_hex(R.H)} L:{formatted_hex(R.L)} SP:{formatted_hex(R.SP,False,True)} SPMEM:{formatted_hex(mmu.get_memory(R.SP & 0xFFFF))},{formatted_hex(mmu.get_memory((R.SP+1) & 0xFFFF))},{formatted_hex(mmu.get_memory((R.SP+2) & 0xFFFF))},{formatted_hex(mmu.get_memory((R.SP+3) & 0xFFFF))} PC:{formatted_hex(R.PC,False,True)} PCMEM:{formatted_hex(mmu.get_memory(R.PC))},{formatted_hex(mmu.get_memory(R.PC+1))},{formatted_hex(mmu.get_memory(R.PC+2))},{formatted_hex(mmu.get_memory(R.PC+3))}\n"
+                state_debug.append(curr_state)
             if args.debug:
                 if pygame.time.get_ticks() - lastTime >= 1000:
                     print(f"CYCLES: {mmu.IO.LCD.CYCLE_COUNTER}")

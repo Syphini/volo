@@ -8,8 +8,9 @@ if TYPE_CHECKING:
 
 
 class PPU:
-    def __init__(self, mmu: "MMU") -> None:
+    def __init__(self, mmu: "MMU", debugging=False) -> None:
         self.mmu = mmu
+        self.DEBUGGING_MODE = False  # debugging
 
         self.LCDC = LCDC(0x91)  # FF40
         self.STAT = STAT(0x85)  # FF41
@@ -44,6 +45,7 @@ class PPU:
     @PPU_MODE.setter
     def PPU_MODE(self, value: int) -> None:
         self._MODE = value
+        self.STAT.set_mode(value)
         match value:
             case 0:
                 if self.STAT.MODE_0_SELECT:
@@ -65,26 +67,77 @@ class PPU:
             source_mem = self.mmu.get_memory(value << 8 | i)
             self.mmu.set_memory(0xFE00 + i, source_mem)
 
+    @property
+    def LY(self) -> int:
+        return self._LY
+
+    @LY.setter
+    def LY(self, value) -> None:
+        self._LY = value
+        self.check_lyc()
+
     def init_pygame(self) -> None:
+        pygame.init()
+        self.CYCLE_COUNTER = 0
+
         self.PIXEL_SIZE = 3
         self.TILE_SIZE = 1
+
         # 160 x 144 screen size
-        # 256 x 256 tilemap
         self.SCREEN_X = 160
         self.SCREEN_Y = 144
+
         self.CANVAS_SIZE = (
             self.SCREEN_X * self.PIXEL_SIZE,
             self.SCREEN_Y * self.PIXEL_SIZE,
         )
 
-        pygame.init()
-        self.CYCLE_COUNTER = 0
+        if self.DEBUGGING_MODE:
+            self.PIXEL_SIZE = 2
+            # 2 (256 x 256) tilemaps
+            # Tilemap 1 9800 -> 9BFF
+            # Tilemap 2 9C00 -> 9FFF
+            self.DEBUG_SCREEN_X = 256 * 2
+            self.DEBUG_SCREEN_Y = 256
+            self.DEBUG_CANVAS_SIZE = (
+                (self.SCREEN_X + self.DEBUG_SCREEN_X) * self.PIXEL_SIZE,
+                self.DEBUG_SCREEN_Y * self.PIXEL_SIZE,
+            )
+            self.CANVAS = pygame.display.set_mode(self.DEBUG_CANVAS_SIZE)
+        else:
+            self.CANVAS = pygame.display.set_mode(self.CANVAS_SIZE)
 
-        self.CANVAS = pygame.display.set_mode(self.CANVAS_SIZE)
-        pygame.display.set_caption("FPS: 0")
+        pygame.display.set_caption("PY-VOLO GB")
 
         self.clear_display()
         pygame.display.flip()
+
+    def debug(self) -> None:
+        offset_x = self.SCREEN_X
+        offset_y = 0
+
+        vram_block = 0x1000
+
+        for y in range(256):
+            yPos = offset_y + y
+            for z in range(2):
+                bg_tilemap = 0x1C00 if z == 1 else 0x1800
+                for x in range(0, 256, 8):
+                    xPos = offset_x + x + (256 * z)
+                    bg_tile_index = self.mmu.VRAM[
+                        bg_tilemap + ((y // 8) * 32) + ((x & 0xFF) // 8)
+                    ]
+                    bg_vram_block_offset = ((bg_tile_index ^ 0x80) - 0x80) * 16
+                    bg_tile = self.mmu.VRAM[
+                        vram_block
+                        + bg_vram_block_offset : vram_block
+                        + bg_vram_block_offset
+                        + 16
+                    ]
+                    bg_colours = self.get_tile_colours(bg_tile, yPos % 8)
+
+                    for xi in range(8):
+                        self.draw_pixel(xPos + xi, yPos, bg_colours[xi])
 
     def dump(self) -> bytearray:
         return bytearray(
@@ -93,7 +146,7 @@ class PPU:
                 self.STAT.get(),
                 self.SCY,
                 self.SCX,
-                self._LY,
+                self.LY,
                 self.LYC,
                 self.DMA,
                 self.BGP,
@@ -115,7 +168,7 @@ class PPU:
             case 0xFF43:
                 return self.SCX
             case 0xFF44:
-                return self._LY
+                return self.LY
             case 0xFF45:
                 return self.LYC
             case 0xFF46:
@@ -162,19 +215,9 @@ class PPU:
             case _:
                 raise Exception("Unknown IO Register:", formatted_hex(addr))
 
-    # Tilemap 1 9800 -> 9BFF
-    # Tilemap 2 9C00 -> 9FFF
-
     def tick(self, cycles: int) -> None:
         if self.LCDC.LCD_ENABLE == 1:
             for _ in range(cycles):
-
-                if self.LYC == self._LY:
-                    self.STAT.LYC_EQUAL = 1
-                    if self.STAT.LYC_SELECT == 1:
-                        self.mmu.IO.IF.LCD = 1
-
-                self.STAT.PPU_MODE = self.PPU_MODE
 
                 match self.PPU_MODE:
                     case 2:  # OAM
@@ -191,9 +234,9 @@ class PPU:
                                 self.draw_oam_line()
                     case 0:  # H-Blank
                         if self._CLOCK == 204:
-                            self._LY += 1
+                            self.LY += 1
 
-                            if self._LY == 143:
+                            if self.LY == 143:
                                 self.mmu.IO.IF.VBLANK = 1
                                 self.PPU_MODE = 1
                             else:
@@ -201,19 +244,30 @@ class PPU:
                             self._CLOCK = 0
                     case 1:  # V-Blank
                         if self._CLOCK == 456:
-                            self._LY += 1
+                            self.LY += 1
                             self._CLOCK = 0
 
-                            if self._LY > 153:
+                            if self.LY > 153:
                                 self.PPU_MODE = 2
-                                self._LY = 0
+                                self.LY = 0
+
+                                # update screen
                                 pygame.display.flip()
                 self._CLOCK += 1
         else:
-            self._LY = 0
+            self.LY = 0
+            self.STAT.set_lyc_equal(0)
             self._CLOCK = 0
-            self.STAT.set(0)
+            self.STAT.set_mode(0)
             self.clear_display()
+
+    def check_lyc(self):
+        if self.LYC == self.LY:
+            self.STAT.set_lyc_equal(1)
+            if self.STAT.LYC_SELECT == 1:
+                self.mmu.IO.IF.LCD = 1
+        else:
+            self.STAT.set_lyc_equal(0)
 
     def draw_pixel(
         self,
@@ -283,38 +337,72 @@ class PPU:
 
     def drawline(self) -> None:
         """Draw the current scanline"""
-        y = self._LY
+        y = self.LY
         scrollY = (y + self.SCY) & 0xFF
 
         # attempting to reduce the number of tile calcs by stepping 8 pixels at a time
         # performance drop at max SCX is negligable compared to recalculating tiles per pixel
         # i'm sure there's a better way to do this but here we are
-        for x in range(0, self.SCREEN_X + self.SCX, 8):
-            use_alt_block = self.LCDC.ALT_BG_WIN_TILES == 1
-            use_alt_tilemap = self.LCDC.ALT_BG_TILEMAP == 1
+        if self.LCDC.BG_WIN_ENABLE == 1:
+            for x in range(0, self.SCREEN_X + self.SCX, 8):
+                use_alt_vram_block = self.LCDC.ALT_BG_WIN_TILES == 1
 
-            vramTileBlock = 0x0000 if use_alt_block else 0x1000
-            tileMap = 0x1C00 if use_alt_tilemap else 0x1800
+                vram_block = 0x0000 if use_alt_vram_block else 0x1000
+                bg_tilemap = 0x1C00 if self.LCDC.ALT_BG_TILEMAP == 1 else 0x1800
+                win_tilemap = 0x1C00 if self.LCDC.ALT_WIN_TILEMAP == 1 else 0x1800
 
-            tileIndex = self.mmu.VRAM[
-                tileMap + ((scrollY // 8) * 32) + ((x & 0xFF) // 8)
-            ]
-            blockOffset = (
-                tileIndex if use_alt_block == 1 else (tileIndex ^ 0x80) - 0x80
-            ) * 16
-            tile = self.mmu.VRAM[
-                vramTileBlock + blockOffset : vramTileBlock + blockOffset + 16
-            ]
-            colours = self.get_tile_colours(tile, scrollY % 8)
+                # BG
+                bg_tile_index = self.mmu.VRAM[
+                    bg_tilemap + ((scrollY // 8) * 32) + ((x & 0xFF) // 8)
+                ]
+                bg_vram_block_offset = (
+                    bg_tile_index
+                    if use_alt_vram_block == 1
+                    else (bg_tile_index ^ 0x80) - 0x80
+                ) * 16
+                bg_tile = self.mmu.VRAM[
+                    vram_block
+                    + bg_vram_block_offset : vram_block
+                    + bg_vram_block_offset
+                    + 16
+                ]
+                bg_colours = self.get_tile_colours(bg_tile, scrollY % 8)
 
-            # reducing draw calls by discarding pixels offscreen
-            for xi in range(8):
-                pixelX = (x + xi) - self.SCX
-                if pixelX >= 0 and pixelX <= self.SCREEN_X:
-                    self.draw_pixel(pixelX, y, colours[xi])
+                # WIN
+                if self.LCDC.WIN_ENABLE == 1:
+                    win_tile_index = self.mmu.VRAM[
+                        win_tilemap + ((y // 8) * 32) + ((x & 0xFF) // 8)
+                    ]
+                    win_vram_block_offset = (
+                        win_tile_index
+                        if use_alt_vram_block == 1
+                        else (win_tile_index ^ 0x80) - 0x80
+                    ) * 16
+                    win_tile = self.mmu.VRAM[
+                        vram_block
+                        + win_vram_block_offset : vram_block
+                        + win_vram_block_offset
+                        + 16
+                    ]
+
+                    win_colours = self.get_tile_colours(win_tile, y % 8)
+
+                # reducing draw calls by discarding pixels offscreen
+                for xi in range(8):
+                    if self.LCDC.WIN_ENABLE == 1:
+                        pixelX = x + xi
+                        if 0 <= pixelX < self.SCREEN_X:
+                            self.draw_pixel(pixelX, y, win_colours[xi])
+                    else:
+                        pixelX = (x + xi) - self.SCX
+                        if 0 <= pixelX < self.SCREEN_X:
+                            self.draw_pixel(pixelX, y, bg_colours[xi])
+        else:
+            for x in range(self.SCREEN_X):
+                self.draw_pixel(x, y, 0)
 
     def draw_oam_line(self) -> None:
-        line = self._LY
+        line = self.LY
 
         tall_tile = bool(self.LCDC.OBJ_SIZE)
 
@@ -349,7 +437,9 @@ class PPU:
             colours = self.get_tile_colours(tile, (line - yPos) % 8, attributes)
 
             for lineX in range(8):
-                self.draw_pixel(xPos + lineX, line, colours[lineX])
+                xPixel = xPos + lineX
+                if 0 <= xPixel < self.SCREEN_X and 0 <= line < self.SCREEN_Y:
+                    self.draw_pixel(xPixel, line, colours[lineX])
 
     def clear_display(self) -> None:
         """Clear the canvas"""
@@ -387,6 +477,8 @@ class LCDC:
 
 class STAT:
     def __init__(self, value: int) -> None:
+        self.LYC_EQUAL = 0
+        self.PPU_MODE = 0
         self.set(value)
 
     def set(self, value: int) -> None:
@@ -394,8 +486,6 @@ class STAT:
         self.MODE_2_SELECT = value >> 5 & 1
         self.MODE_1_SELECT = value >> 4 & 1
         self.MODE_0_SELECT = value >> 3 & 1
-        self.LYC_EQUAL = value >> 2 & 1
-        self.PPU_MODE = value & 3
 
     def get(self) -> int:
         return (
@@ -408,3 +498,9 @@ class STAT:
             | (self.PPU_MODE >> 1) << 1
             | self.PPU_MODE & 1
         )
+
+    def set_mode(self, value: int) -> None:
+        self.PPU_MODE = value & 3
+
+    def set_lyc_equal(self, value: int) -> None:
+        self.LYC_EQUAL = value & 1

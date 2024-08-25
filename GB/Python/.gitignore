@@ -1,0 +1,12 @@
+# Python
+**/__pycache__
+**/.venv
+
+*.prof
+
+# mypy
+**/build
+**/*.pyd
+
+# logs
+**/logs
